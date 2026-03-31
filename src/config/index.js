@@ -1,0 +1,132 @@
+/**
+ * CinCin — Application Configuration
+ *
+ * Phase 4 update: Added Stripe, email, push notification, and cron configuration.
+ */
+
+require("dotenv").config();
+
+module.exports = {
+  env: process.env.NODE_ENV || "development",
+  port: parseInt(process.env.PORT, 10) || 4000,
+  appUrl: process.env.APP_URL || "http://localhost:3000",
+  corsOrigin: process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
+  : 'http://localhost:3000',
+
+  // JWT
+  jwt: {
+    secret: process.env.JWT_SECRET || "dev-secret-change-me",
+    expiresIn: process.env.JWT_EXPIRES_IN || "1h",
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
+  },
+  // Legacy flat access (backward compat with Phase 1–3 code)
+  jwtSecret: process.env.JWT_SECRET || "dev-secret-change-me",
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN || "1h",
+  jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
+
+  // Database
+  databaseUrl: process.env.DATABASE_URL,
+
+  // Redis
+  redisUrl: process.env.REDIS_URL || null,
+
+  // AI Providers
+  anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+  openaiApiKey: process.env.OPENAI_API_KEY,
+  googleVisionApiKey: process.env.GOOGLE_VISION_API_KEY,
+  visionProvider: process.env.VISION_PROVIDER || "anthropic",
+
+  // Age Verification
+  ageVerifyProvider: process.env.AGE_VERIFY_PROVIDER || "mock",
+  onfidoApiKey: process.env.ONFIDO_API_KEY,
+  onfidoWebhookSecret: process.env.ONFIDO_WEBHOOK_SECRET,
+  jumioApiKey: process.env.JUMIO_API_KEY,
+  jumioApiSecret: process.env.JUMIO_API_SECRET,
+
+  // Share URLs
+  shareBaseUrl: process.env.SHARE_BASE_URL || "http://localhost:3000",
+
+  // Free tier limits (Section 8.1)
+  freeTier: {
+    maxScansPerMonth: 5,
+    maxCellarClubs: 1,
+  },
+
+  // Scan settings
+  scan: {
+    noteCountRange: 2,
+    noteCountFloor: 3,
+    highConfidence: 0.8,
+    mediumConfidence: 0.5,
+  },
+
+  // Game settings
+  game: {
+    lobbyTimeoutMs: 10 * 60 * 1000, // 10 minutes
+    maxGuestPlayers: 20,
+    offlineSyncMaxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    defaultTimerSecs: 60,
+    defaultMaxRounds: 20,
+  },
+
+  // Phase 2: AI Guess Evaluation
+  aiGuessEval: {
+    minConfidence: 0.7,
+    timeoutMs: 5000,
+  },
+
+  // Phase 3: WebSocket configuration
+  websocket: {
+    reconnectWindowMs: 2 * 60 * 1000,
+    pingInterval: 10000,
+    pingTimeout: 5000,
+    roundRevealDelayMs: 3000,
+  },
+
+  // Phase 3: Cellar Club settings
+  cellarClub: {
+    maxMemberCapDefault: 1000,
+    seasonAutoEndCronInterval: "0 * * * *",
+  },
+
+  // ═══════════════════════════════════════════
+  //  PHASE 4: Stripe Subscription (Section 8.2)
+  // ═══════════════════════════════════════════
+  stripe: {
+    secretKey: process.env.STRIPE_SECRET_KEY || null,
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || null,
+    monthlyPriceId: process.env.STRIPE_MONTHLY_PRICE_ID || null,
+    annualPriceId: process.env.STRIPE_ANNUAL_PRICE_ID || null,
+    // AUD $12.99/month, annual option (discounted ~20%)
+    monthlyPriceAud: 12.99,
+    annualPriceAud: 9.99, // per month, billed annually ($119.88/year)
+  },
+
+  // ═══════════════════════════════════════════
+  //  PHASE 4: Email Service (Sections 10.1, 10.4)
+  // ═══════════════════════════════════════════
+  email: {
+    sendgridApiKey: process.env.SENDGRID_API_KEY || null,
+    fromAddress: process.env.EMAIL_FROM_ADDRESS || "noreply@getcincin.com",
+    fromName: process.env.EMAIL_FROM_NAME || "CinCin",
+  },
+
+  // ═══════════════════════════════════════════
+  //  PHASE 4: Push Notifications (Section 10.1)
+  // ═══════════════════════════════════════════
+  push: {
+    fcmServiceAccount: process.env.FIREBASE_SERVICE_ACCOUNT || null,
+    apnsKeyPath: process.env.APNS_KEY_PATH || null,
+    apnsKeyId: process.env.APNS_KEY_ID || null,
+    apnsTeamId: process.env.APNS_TEAM_ID || null,
+    apnsBundleId: process.env.APNS_BUNDLE_ID || "com.getcincin.app",
+  },
+
+  // ═══════════════════════════════════════════
+  //  PHASE 4: Cron / Scheduled Jobs
+  // ═══════════════════════════════════════════
+  cron: {
+    enabled: process.env.CRON_ENABLED !== "false", // default enabled
+  },
+};

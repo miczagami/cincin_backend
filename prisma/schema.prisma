@@ -1,0 +1,769 @@
+// ─── CinCin Database Schema ───
+// Phase 4 update: Palate Profile dashboard, Stripe subscriptions,
+// discovery feed, Buy tab, notifications, engagement summaries
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════
+//  DOMAIN 1 — USERS & AUTHENTICATION
+// ═══════════════════════════════════════════
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  passwordHash      String?   // null for social-login-only users
+  displayName       String
+  avatarUrl         String?
+  bio               String?   @db.VarChar(160)
+  location          String?
+  dateOfBirth       DateTime?
+  ageVerified       Boolean   @default(false)
+  ageVerifiedAt     DateTime?
+  emailVerified     Boolean   @default(false)
+  emailVerifiedAt   DateTime?
+
+  // Auth
+  authProvider      AuthProvider @default(EMAIL)
+  socialProviderId  String?     // Google/Apple user ID
+
+  // Subscription (Phase 4: Stripe integration)
+  subscriptionTier  SubscriptionTier @default(FREE)
+  subscriptionId    String?         // Stripe subscription ID
+  stripeCustomerId  String?         // Stripe customer ID
+  subscriptionStatus String?        // 'active', 'trialing', 'canceled', 'past_due', 'none'
+  subscriptionPlan  String?         // 'monthly', 'annual'
+  subscriptionCurrentPeriodEnd DateTime? // when current billing period ends
+  trialUsed         Boolean         @default(false)
+  trialStartedAt    DateTime?
+  trialEndsAt       DateTime?
+  trialEligible     Boolean         @default(true) // false after first trial
+
+  // Scan limits (free tier)
+  monthlyScansUsed  Int       @default(0)
+  scanResetDate     DateTime  @default(now())
+
+  // Preferences
+  drinkPreferences  DrinkCategory[]
+  b2bDataOptIn      Boolean   @default(false)
+
+  // Notification preferences
+  notifGameInvites        Boolean @default(true)
+  notifCellarClubActivity Boolean @default(true)
+  notifSeasonReminders    Boolean @default(true)
+  notifPalateUpdates      Boolean @default(false)
+  notifWeeklyDigests      Boolean @default(false)
+  notifEmail              Boolean @default(true)
+  notifPush               Boolean @default(true)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime? // soft delete
+
+  // Relations
+  hostedGames           Game[]              @relation("GameHost")
+  gamePlayers           GamePlayer[]
+  cellarMemberships     CellarMember[]
+  ownedClubs            CellarClub[]        @relation("ClubAdmin")
+  notifications         Notification[]
+  palateStats           PalateCategory[]
+  palateSnapshots       PalateSnapshot[]    // Phase 4: per-game accuracy trend
+  bottleScans           BottleScan[]
+  passwordResets        PasswordReset[]
+  sessions              Session[]
+  pushTokens            PushToken[]         // Phase 4: push notification tokens
+  engagementSummaries   EngagementSummary[] // Phase 4: monthly/quarterly summaries
+  affiliateClicks       AffiliateClick[]    // Phase 4: click tracking
+
+  @@index([email])
+  @@index([subscriptionTier])
+  @@index([stripeCustomerId])
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("sessions")
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+  @@map("password_resets")
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  APPLE
+}
+
+enum SubscriptionTier {
+  FREE
+  PRO
+}
+
+// ═══════════════════════════════════════════
+//  DOMAIN 2 — BOTTLES & TASTING NOTES
+// ═══════════════════════════════════════════
+
+model Bottle {
+  id           String        @id @default(cuid())
+  name         String        // e.g. "Penfolds Bin 389"
+  producer     String?
+  vintage      String?       // e.g. "2021"
+  region       String?
+  subRegion    String?
+  country      String?
+  category     DrinkCategory @default(WINE)
+  subcategory  String?       // e.g. "Shiraz", "IPA", "Single Malt"
+  varietal     String?
+  barcode      String?       @unique
+  imageUrl     String?
+  description  String?       @db.Text
+  abv          Float?
+  volume       String?       // e.g. "750ml"
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  // Relations
+  tastingNotes      TastingNote[]
+  discoveryFeedItems DiscoveryFeedItem[]
+  games             Game[]
+  scans             BottleScan[]
+  affiliateLinks    AffiliateLink[]
+  sponsoredTastings SponsoredTasting[] // Phase 4
+
+  @@index([name])
+  @@index([barcode])
+  @@index([category])
+  @@map("bottles")
+}
+
+model TastingNote {
+  id          String     @id @default(cuid())
+  bottleId    String
+  note        String     // the specific note e.g. "Rainier cherry"
+  genericNote String?    // the generic category e.g. "cherry"
+  sourceTier  SourceTier @default(AI_SYNTHESISED)
+  sourceRef   String?    // reference URL or citation
+  createdAt   DateTime   @default(now())
+
+  bottle       Bottle       @relation(fields: [bottleId], references: [id], onDelete: Cascade)
+  guesses      Guess[]
+  guestGuesses GuestGuess[]
+
+  @@unique([bottleId, note])
+  @@index([bottleId])
+  @@index([sourceTier])
+  @@map("tasting_notes")
+}
+
+model BottleScan {
+  id         String   @id @default(cuid())
+  userId     String
+  bottleId   String?  // null if AI couldn't match
+  method     ScanMethod
+  confidence Float?
+  rawResult  Json?    // raw AI response for debugging
+  createdAt  DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id])
+  bottle Bottle? @relation(fields: [bottleId], references: [id])
+
+  @@index([userId])
+  @@index([bottleId])
+  @@map("bottle_scans")
+}
+
+model AffiliateLink {
+  id        String  @id @default(cuid())
+  bottleId  String
+  partner   String  // e.g. "Dan Murphy's", "Vivino"
+  url       String
+  price     Float?
+  currency  String? @default("AUD")
+
+  bottle Bottle @relation(fields: [bottleId], references: [id], onDelete: Cascade)
+  clicks AffiliateClick[] // Phase 4
+
+  @@index([bottleId])
+  @@map("affiliate_links")
+}
+
+// Phase 4: Affiliate click tracking
+model AffiliateClick {
+  id              String   @id @default(cuid())
+  userId          String?
+  affiliateLinkId String
+  bottleId        String
+  partner         String
+  source          String   @default("buy_tab") // buy_tab, scan_confirm, game_results
+  clickedAt       DateTime @default(now())
+
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  affiliateLink AffiliateLink @relation(fields: [affiliateLinkId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([affiliateLinkId])
+  @@index([clickedAt])
+  @@map("affiliate_clicks")
+}
+
+enum DrinkCategory {
+  WINE
+  BEER
+  SPIRITS
+  OTHER
+}
+
+enum SourceTier {
+  PRODUCER
+  CRITIC
+  AI_SYNTHESISED
+}
+
+enum ScanMethod {
+  CAMERA
+  BARCODE
+  MANUAL_SEARCH
+}
+
+// ═══════════════════════════════════════════
+//  DOMAIN 3 — FLAVOUR TAXONOMY
+// ═══════════════════════════════════════════
+
+model FlavourNode {
+  id           String          @id @default(cuid())
+  name         String          // e.g. "cherry", "Rainier cherry"
+  parentId     String?
+  isGeneric    Boolean         @default(false) // true = category, false = specific variant
+  drinkTypes   DrinkCategory[]
+  aiExtended   Boolean         @default(false) // flagged for manual review
+  approved     Boolean         @default(true)
+
+  parent       FlavourNode?    @relation("FlavourTree", fields: [parentId], references: [id])
+  children     FlavourNode[]   @relation("FlavourTree")
+
+  @@unique([name, parentId])
+  @@index([parentId])
+  @@index([name])
+  @@map("flavour_nodes")
+}
+
+// ═══════════════════════════════════════════
+//  DOMAIN 4 — GAMES & GAMEPLAY
+// ═══════════════════════════════════════════
+
+model Game {
+  id               String       @id @default(cuid())
+  hostId           String
+  bottleId         String
+  gameCode         String       @unique @db.VarChar(6)
+  status           GameStatus   @default(LOBBY)
+
+  // Configuration (Section 3.6 & Appendix A)
+  mode             GameMode     @default(PARALLEL)
+  multiplayerType  MultiplayerType @default(PASS_THE_PHONE)
+  roundTimerSecs   Int          @default(60)
+  maxRounds        Int          @default(20)
+  optOutTiming     OptOutTiming @default(START_OF_ROUND)
+  scoreboardVisible Boolean     @default(true)
+
+  // State
+  currentRound     Int          @default(0)
+  startedAt        DateTime?
+  endedAt          DateTime?
+  endReason        GameEndReason?
+
+  // Phase 2: Pass-the-phone turn tracking
+  currentTurnPlayerId String?
+  currentTurnOrder    Int?
+
+  // Phase 3: Multi-device round state
+  roundStartedAt   DateTime?
+  roundSubmissions  Int          @default(0)
+
+  // Cellar Club tagging
+  cellarClubId     String?
+  clubApprovalStatus ClubApprovalStatus?
+
+  // Phase 2: Offline support
+  createdOffline   Boolean      @default(false)
+  syncedAt         DateTime?
+
+  // Phase 2: Sharing
+  shareToken       String?      @unique
+
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  host            User           @relation("GameHost", fields: [hostId], references: [id])
+  bottle          Bottle         @relation(fields: [bottleId], references: [id])
+  cellarClub      CellarClub?    @relation(fields: [cellarClubId], references: [id])
+  players         GamePlayer[]
+  guestPlayers    GuestPlayer[]
+  rounds          Round[]
+  palateSnapshots PalateSnapshot[] // Phase 4: link snapshots to games
+
+  @@index([hostId])
+  @@index([bottleId])
+  @@index([gameCode])
+  @@index([status])
+  @@index([shareToken])
+  @@index([cellarClubId])
+  @@map("games")
+}
+
+model GamePlayer {
+  id           String           @id @default(cuid())
+  gameId       String
+  userId       String
+  joinOrder    Int              @default(0)
+  totalScore   Int              @default(0)
+  status       GamePlayerStatus @default(ACTIVE)
+  optedOutAt   DateTime?
+
+  // Phase 3: WebSocket session tracking
+  socketId     String?
+  lastPingAt   DateTime?
+
+  game     Game    @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user     User    @relation(fields: [userId], references: [id])
+  guesses  Guess[]
+
+  @@unique([gameId, userId])
+  @@index([gameId])
+  @@index([userId])
+  @@map("game_players")
+}
+
+model GuestPlayer {
+  id           String @id @default(cuid())
+  gameId       String
+  displayName  String
+  joinOrder    Int    @default(0)
+  totalScore   Int    @default(0)
+  status       GamePlayerStatus @default(ACTIVE)
+  optedOutAt   DateTime?
+
+  game    Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  guesses GuestGuess[]
+
+  @@index([gameId])
+  @@map("guest_players")
+}
+
+model Round {
+  id        String @id @default(cuid())
+  gameId    String
+  number    Int
+  createdAt DateTime @default(now())
+
+  game    Game    @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  guesses Guess[]
+  guestGuesses GuestGuess[]
+
+  @@unique([gameId, number])
+  @@index([gameId])
+  @@map("rounds")
+}
+
+model Guess {
+  id            String        @id @default(cuid())
+  roundId       String
+  gamePlayerId  String
+  tastingNoteId String?       // null if wrong guess
+  guessText     String
+  matchType     GuessMatchType?
+  isSpecific    Boolean       @default(false)
+  points        Int           @default(0)
+  aiEvaluation  Json?         // stores AI reasoning for free-text evaluation
+  createdAt     DateTime      @default(now())
+
+  round       Round       @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  gamePlayer  GamePlayer  @relation(fields: [gamePlayerId], references: [id], onDelete: Cascade)
+  tastingNote TastingNote? @relation(fields: [tastingNoteId], references: [id])
+
+  @@index([roundId])
+  @@index([gamePlayerId])
+  @@index([tastingNoteId])
+  @@map("guesses")
+}
+
+model GuestGuess {
+  id            String        @id @default(cuid())
+  roundId       String
+  guestPlayerId String
+  tastingNoteId String?
+  guessText     String
+  matchType     GuessMatchType?
+  isSpecific    Boolean       @default(false)
+  points        Int           @default(0)
+  aiEvaluation  Json?
+  createdAt     DateTime      @default(now())
+
+  round       Round        @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  guestPlayer GuestPlayer  @relation(fields: [guestPlayerId], references: [id], onDelete: Cascade)
+  tastingNote TastingNote? @relation(fields: [tastingNoteId], references: [id])
+
+  @@index([roundId])
+  @@index([guestPlayerId])
+  @@map("guest_guesses")
+}
+
+model OfflineSyncQueue {
+  id           String   @id @default(cuid())
+  userId       String
+  gameData     Json
+  status       String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  error        String?
+  processedAt  DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([status])
+  @@map("offline_sync_queue")
+}
+
+enum GameStatus {
+  LOBBY
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+  CANCELLED
+}
+
+enum GameMode {
+  COMPETITIVE
+  PARALLEL
+}
+
+enum MultiplayerType {
+  PASS_THE_PHONE
+  MULTI_DEVICE
+  REMOTE
+}
+
+enum OptOutTiming {
+  ANY_MOMENT
+  START_OF_ROUND
+  AFTER_RESULTS
+}
+
+enum GameEndReason {
+  ALL_OPTED_OUT
+  ALL_NOTES_CLAIMED
+  MAX_ROUNDS_REACHED
+  HOST_ENDED
+  HOST_DISCONNECTED
+}
+
+enum GamePlayerStatus {
+  ACTIVE
+  OPTED_OUT
+  DISCONNECTED
+  FROZEN
+}
+
+enum GuessMatchType {
+  EXACT
+  GENERIC_MATCH
+  SYNONYM
+  AI_EVALUATED
+}
+
+enum ClubApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ═══════════════════════════════════════════
+//  DOMAIN 5 — CELLAR CLUBS & SEASONS
+// ═══════════════════════════════════════════
+
+model CellarClub {
+  id           String          @id @default(cuid())
+  adminId      String
+  name         String
+  memberCap    Int?
+  inviteCode   String          @unique @db.VarChar(6)
+  inviteLink   String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  archivedAt   DateTime?
+
+  admin        User            @relation("ClubAdmin", fields: [adminId], references: [id])
+  members      CellarMember[]
+  seasons      Season[]
+  games        Game[]
+  activities   ClubActivity[]
+
+  @@index([inviteCode])
+  @@index([adminId])
+  @@map("cellar_clubs")
+}
+
+model CellarMember {
+  id        String   @id @default(cuid())
+  clubId    String
+  userId    String
+  role      ClubRole @default(MEMBER)
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+
+  club CellarClub @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id])
+
+  @@unique([clubId, userId])
+  @@index([clubId])
+  @@index([userId])
+  @@map("cellar_members")
+}
+
+model Season {
+  id         String       @id @default(cuid())
+  clubId     String
+  name       String?
+  seasonType SeasonType   @default(FIXED_DATE)
+  startDate  DateTime     @default(now())
+  endDate    DateTime?
+  lengthDays Int?
+  status     SeasonStatus @default(ACTIVE)
+  createdAt  DateTime     @default(now())
+
+  awards         Json?
+  finalStandings Json?
+
+  club CellarClub @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId])
+  @@index([status])
+  @@map("seasons")
+}
+
+model ClubActivity {
+  id        String   @id @default(cuid())
+  clubId    String
+  type      ClubActivityType
+  actorId   String?
+  data      Json?
+  createdAt DateTime @default(now())
+
+  club CellarClub @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  @@index([clubId, createdAt])
+  @@map("club_activities")
+}
+
+enum ClubActivityType {
+  GAME_SUBMITTED
+  GAME_APPROVED
+  GAME_REJECTED
+  MEMBER_JOINED
+  MEMBER_LEFT
+  MEMBER_REMOVED
+  SEASON_STARTED
+  SEASON_ENDED
+  LEADERBOARD_CHANGE
+}
+
+enum ClubRole {
+  ADMIN
+  MEMBER
+}
+
+enum SeasonType {
+  FIXED_DATE
+  FIXED_LENGTH
+  ROLLING
+}
+
+enum SeasonStatus {
+  ACTIVE
+  ENDED
+  ARCHIVED
+}
+
+// ═══════════════════════════════════════════
+//  DOMAIN 6 — PALATE PROFILE
+// ═══════════════════════════════════════════
+
+model PalateCategory {
+  id             String @id @default(cuid())
+  userId         String
+  category       String // e.g. "oak", "citrus", "floral"
+  drinkType      String? // Phase 4: nullable to allow per-drink-type breakdown
+  totalGuesses   Int    @default(0)
+  correctGuesses Int    @default(0)
+  accuracy       Float  @default(0)
+  gamesAppearedIn Int   @default(0) // Phase 4: confidence indicator
+  lastUpdated    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category, drinkType])
+  @@index([userId])
+  @@map("palate_categories")
+}
+
+// Phase 4: Per-game accuracy snapshot for trend-over-time chart
+model PalateSnapshot {
+  id              String   @id @default(cuid())
+  userId          String
+  gameId          String
+  overallAccuracy Float    @default(0) // % correct in this game
+  correctGuesses  Int      @default(0)
+  totalGuesses    Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("palate_snapshots")
+}
+
+// ═══════════════════════════════════════════
+//  DOMAIN 7 — NOTIFICATIONS
+// ═══════════════════════════════════════════
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // e.g. "game_invite", "club_approval", "season_ending"
+  title     String
+  body      String
+  data      Json?
+  read      Boolean  @default(false)
+  channel   String   @default("in_app") // Phase 4: in_app, push, email
+  pushSent  Boolean  @default(false)    // Phase 4
+  emailSent Boolean  @default(false)    // Phase 4
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// Phase 4: Push notification device tokens
+model PushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String
+  platform  String   @default("web") // web, ios, android
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, token])
+  @@index([userId])
+  @@map("push_tokens")
+}
+
+// ═══════════════════════════════════════════
+//  DOMAIN 8 — DISCOVERY & COMMERCE (Phase 4)
+// ═══════════════════════════════════════════
+
+// Sponsored tastings for the discovery feed (Section 8.3)
+model SponsoredTasting {
+  id               String    @id @default(cuid())
+  bottleId         String
+  brandName        String
+  headline         String
+  description      String?
+  imageUrl         String?
+  badgeText        String    @default("Sponsored")
+  doublePoints     Boolean   @default(true)
+  targetRegions    String[]
+  targetDrinkTypes String[]
+  startDate        DateTime  @default(now())
+  endDate          DateTime?
+  isActive         Boolean   @default(true)
+  impressions      Int       @default(0)
+  gameStarts       Int       @default(0)
+  createdAt        DateTime  @default(now())
+
+  bottle Bottle @relation(fields: [bottleId], references: [id], onDelete: Cascade)
+
+  @@index([isActive, startDate, endDate])
+  @@index([bottleId])
+  @@map("sponsored_tastings")
+}
+
+// Organic discovery feed items (trending bottles, seasonal picks)
+model DiscoveryFeedItem {
+  id        String    @id @default(cuid())
+  type      String    @default("trending") // trending, seasonal, editorial, new_arrival
+  title     String
+  subtitle  String?
+  imageUrl  String?
+  bottleId  String?
+  linkUrl   String?
+  data      Json?
+  priority  Int       @default(0)
+  isActive  Boolean   @default(true)
+  startDate DateTime  @default(now())
+  endDate   DateTime?
+  createdAt DateTime  @default(now())
+
+  bottle Bottle? @relation(fields: [bottleId], references: [id], onDelete: SetNull)
+
+  @@index([isActive, priority])
+  @@map("discovery_feed_items")
+}
+
+// ═══════════════════════════════════════════
+//  DOMAIN 9 — ENGAGEMENT SUMMARIES (Phase 4)
+// ═══════════════════════════════════════════
+
+// Generated engagement reports (Section 10.4)
+model EngagementSummary {
+  id                String   @id @default(cuid())
+  userId            String
+  type              String   // monthly_palate_wrapped, quarterly_summary, season_end_report
+  periodStart       DateTime
+  periodEnd         DateTime
+  data              Json     // full summary data
+  shareableCardUrl  String?  // S3 URL to generated shareable image
+  deliveredEmail    Boolean  @default(false)
+  deliveredPush     Boolean  @default(false)
+  deliveredInApp    Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, periodStart])
+  @@index([userId])
+  @@map("engagement_summaries")
+}

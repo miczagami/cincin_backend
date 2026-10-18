@@ -35,14 +35,14 @@ module.exports = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY,
   openaiApiKey: process.env.OPENAI_API_KEY,
   googleVisionApiKey: process.env.GOOGLE_VISION_API_KEY,
-  visionProvider: process.env.VISION_PROVIDER || "anthropic",
+  visionProvider: process.env.AI_VISION_PROVIDER || "anthropic",
+  llmProvider: process.env.AI_LLM_PROVIDER || "anthropic",
 
-  // Age Verification
-  ageVerifyProvider: process.env.AGE_VERIFY_PROVIDER || "mock",
-  onfidoApiKey: process.env.ONFIDO_API_KEY,
-  onfidoWebhookSecret: process.env.ONFIDO_WEBHOOK_SECRET,
-  jumioApiKey: process.env.JUMIO_API_KEY,
-  jumioApiSecret: process.env.JUMIO_API_SECRET,
+  // Age Verification (read directly by services/ageVerifyService.js)
+  ageVerifyProvider: process.env.AGE_VERIFY_PROVIDER || "onfido",
+  ageVerifyApiKey: process.env.AGE_VERIFY_API_KEY,
+  ageVerifyApiSecret: process.env.AGE_VERIFY_API_SECRET,
+  ageVerifyWebhookSecret: process.env.AGE_VERIFY_WEBHOOK_SECRET,
 
   // Share URLs
   shareBaseUrl: process.env.SHARE_BASE_URL || "http://localhost:3000",

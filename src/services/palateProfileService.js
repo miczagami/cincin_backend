@@ -179,7 +179,7 @@ function aggregateGuessesByCategory(guesses, games) {
 
     const existing = categoryMap.get(category) || { total: 0, correct: 0, games: new Set() };
     existing.total += 1;
-    existing.correct += guess.points > 0 ? 1 : 0;
+    existing.correct += guess.pointsAwarded > 0 ? 1 : 0;
     existing.games.add(guess.round.gameId);
     categoryMap.set(category, existing);
   }
@@ -243,7 +243,7 @@ async function getRecentDrinkTypeAccuracy(userId) {
       game: { select: { bottle: { select: { category: true } } } },
       guesses: {
         where: { guessText: { not: "[auto-skip]" } },
-        select: { points: true },
+        select: { pointsAwarded: true },
       },
     },
   });
@@ -255,7 +255,7 @@ async function getRecentDrinkTypeAccuracy(userId) {
     const existing = drinkMap.get(drinkType) || { total: 0, correct: 0 };
     for (const guess of gp.guesses) {
       existing.total += 1;
-      existing.correct += guess.points > 0 ? 1 : 0;
+      existing.correct += guess.pointsAwarded > 0 ? 1 : 0;
     }
     drinkMap.set(drinkType, existing);
   }
@@ -330,7 +330,7 @@ async function getOverallStats(userId, recentOnly = false) {
     totalScore += gp.totalScore;
     for (const guess of gp.guesses) {
       totalGuesses += 1;
-      if (guess.points > 0) correctGuesses += 1;
+      if (guess.pointsAwarded > 0) correctGuesses += 1;
     }
   }
 
@@ -434,7 +434,7 @@ async function generateWrappedCard(userId, { month, year } = {}) {
       totalGuesses += 1;
       const category = guess.tastingNote?.genericNote || guess.tastingNote?.note;
 
-      if (guess.points > 0) {
+      if (guess.pointsAwarded > 0) {
         correctGuesses += 1;
         if (category) {
           categoryHits.set(category, (categoryHits.get(category) || 0) + 1);
@@ -592,7 +592,7 @@ function calculateAccuracy(gamePlayers) {
   for (const gp of gamePlayers) {
     for (const guess of gp.guesses || []) {
       total += 1;
-      if (guess.points > 0) correct += 1;
+      if (guess.pointsAwarded > 0) correct += 1;
     }
   }
   return total > 0 ? (correct / total) * 100 : 0;

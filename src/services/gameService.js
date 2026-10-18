@@ -844,7 +844,10 @@ async function advanceRound(gameId, hostId) {
     where: { id: gameId },
     include: {
       bottle: { include: { tastingNotes: true } },
-      players: { orderBy: { playerOrder: "asc" } },
+      players: {
+        include: { user: { select: { displayName: true } } },
+        orderBy: { playerOrder: "asc" },
+      },
       guestPlayers: { orderBy: { playerOrder: "asc" } },
     },
   });
@@ -1300,7 +1303,8 @@ async function updatePalateStats(game) {
 
       await prisma.palateCategory.upsert({
         where: {
-          userId_category: { userId: player.userId, category: category.toLowerCase() },
+          // drinkType "" = all-drink-types row (matches palateProfileService)
+          userId_category_drinkType: { userId: player.userId, category: category.toLowerCase(), drinkType: "" },
         },
         update: {
           totalGuesses: { increment: 1 },
@@ -1314,6 +1318,7 @@ async function updatePalateStats(game) {
         create: {
           userId: player.userId,
           category: category.toLowerCase(),
+          drinkType: "",
           totalGuesses: 1,
           correctGuesses: guess.isCorrect ? 1 : 0,
           accuracy: guess.isCorrect ? 1.0 : 0.0,
@@ -1323,7 +1328,7 @@ async function updatePalateStats(game) {
 
       // Recalculate accuracy
       const stat = await prisma.palateCategory.findUnique({
-        where: { userId_category: { userId: player.userId, category: category.toLowerCase() } },
+        where: { userId_category_drinkType: { userId: player.userId, category: category.toLowerCase(), drinkType: "" } },
       });
       if (stat && stat.totalGuesses > 0) {
         await prisma.palateCategory.update({

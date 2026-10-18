@@ -178,6 +178,45 @@ async function resetPassword({ token, newPassword }) {
 }
 
 /**
+ * Change password for an authenticated email/password user.
+ * Invalidates all other sessions, keeping the current one.
+ */
+async function changePassword(userId, { currentPassword, newPassword }, currentToken) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, passwordHash: true, authProvider: true, deletedAt: true },
+  });
+
+  if (!user || user.deletedAt) {
+    throw new AppError("User not found", 404);
+  }
+
+  // Social-only accounts have no password to change
+  if (!user.passwordHash || user.authProvider !== "EMAIL") {
+    throw new AppError("This account uses social login. Password change is not available.", 400);
+  }
+
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!valid) {
+    throw new AppError("Current password is incorrect", 401);
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    }),
+    prisma.session.deleteMany({
+      where: { userId, token: { not: currentToken } },
+    }),
+  ]);
+
+  return { message: "Password changed successfully." };
+}
+
+/**
  * Refresh access token.
  */
 async function refreshToken(refreshTokenStr) {
@@ -249,6 +288,7 @@ module.exports = {
   socialLogin,
   requestPasswordReset,
   resetPassword,
+  changePassword,
   refreshToken,
   logout,
 };

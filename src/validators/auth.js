@@ -81,6 +81,15 @@ const passwordResetRules = [
     .matches(/[0-9]/).withMessage("Password must contain at least one number"),
 ];
 
+const changePasswordRules = [
+  body("currentPassword")
+    .notEmpty().withMessage("Current password is required"),
+  body("newPassword")
+    .isLength({ min: 8 }).withMessage("New password must be at least 8 characters")
+    .matches(/[A-Za-z]/).withMessage("New password must contain at least one letter")
+    .matches(/[0-9]/).withMessage("New password must contain at least one number"),
+];
+
 module.exports = {
   validate,
   signUpRules,
@@ -89,4 +98,5 @@ module.exports = {
   updateProfileRules,
   passwordResetRequestRules,
   passwordResetRules,
+  changePasswordRules,
 };

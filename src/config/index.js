@@ -50,7 +50,10 @@ module.exports = {
   // Free tier limits (Section 8.1)
   freeTier: {
     maxScansPerMonth: 5,
+    monthlyScans: 5, // read by scanService / helpers
     maxCellarClubs: 1,
+    roundTimerSecs: 60, // free users get the default game config
+    maxRounds: 20,
   },
 
   // Scan settings
@@ -64,6 +67,8 @@ module.exports = {
   // Game settings
   game: {
     lobbyTimeoutMs: 10 * 60 * 1000, // 10 minutes
+    lobbyTimeoutMinutes: 10,
+    gameCodeLength: 6, // join validator requires exactly 6 chars
     maxGuestPlayers: 20,
     offlineSyncMaxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     defaultTimerSecs: 60,

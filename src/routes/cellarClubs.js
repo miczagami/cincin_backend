@@ -107,7 +107,7 @@ router.post("/:clubId/games/:gameId/tag", async (req, res, next) => {
 // POST /api/clubs/:clubId/games/:gameId/approve — admin approves game
 router.post("/:clubId/games/:gameId/approve", async (req, res, next) => {
   try {
-    const result = await cellarClubService.approveGame(req.params.gameId, req.user.id);
+    const result = await cellarClubService.approveGame(req.params.clubId, req.params.gameId, req.user.id);
     res.json(result);
   } catch (err) { next(err); }
 });
@@ -115,7 +115,7 @@ router.post("/:clubId/games/:gameId/approve", async (req, res, next) => {
 // POST /api/clubs/:clubId/games/:gameId/reject — admin rejects game
 router.post("/:clubId/games/:gameId/reject", async (req, res, next) => {
   try {
-    const result = await cellarClubService.rejectGame(req.params.gameId, req.user.id);
+    const result = await cellarClubService.rejectGame(req.params.clubId, req.params.gameId, req.user.id);
     res.json(result);
   } catch (err) { next(err); }
 });

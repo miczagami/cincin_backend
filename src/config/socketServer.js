@@ -266,8 +266,8 @@ async function handleStartGame(socket, gameId) {
   const game = await gameService.startGame(gameId, socket.userId);
 
   if (game.multiplayerType !== "PASS_THE_PHONE") {
-    // Multi-device/remote: start first round immediately
-    await startNewRound(gameId);
+    // Multi-device/remote: gameService.startGame already created round 1 — open it now
+    await beginRound(gameId, 1);
   }
 
   io.to(`game:${gameId}`).emit("game:started", {
@@ -300,28 +300,36 @@ async function startNewRound(gameId) {
     return;
   }
 
-  // Create the round
-  const round = await prisma.round.create({
+  await prisma.round.create({
     data: { gameId, roundNumber: newRoundNumber },
   });
 
-  // Update game state
-  await prisma.game.update({
+  await beginRound(gameId, newRoundNumber);
+}
+
+/**
+ * Open an existing round: reset submissions, broadcast round-start, and arm the round timer.
+ */
+async function beginRound(gameId, roundNumber) {
+  const game = await prisma.game.update({
     where: { id: gameId },
     data: {
-      currentRound: newRoundNumber,
+      currentRound: roundNumber,
       roundStartedAt: new Date(),
       roundSubmissions: 0,
     },
+    include: { players: true },
   });
+
+  const round = await prisma.round.findFirst({ where: { gameId, roundNumber } });
 
   // Get claimed notes for reveal-proof display
   const gameService = require("../services/gameService");
   const gameState = await gameService.getGameState(gameId, game.hostId);
 
   io.to(`game:${gameId}`).emit("game:round-start", {
-    roundNumber: newRoundNumber,
-    roundId: round.id,
+    roundNumber,
+    roundId: round?.id,
     timerSecs: game.roundTimerSecs,
     claimedNotes: gameState.claimedNotes || [],
     activePlayers: game.players.filter((p) => p.status === "ACTIVE").length,
@@ -330,7 +338,7 @@ async function startNewRound(gameId) {
   // Set round timer — auto-skip and reveal when timer expires
   const roundTimerMs = game.roundTimerSecs * 1000;
   setTimeout(async () => {
-    await handleRoundTimeout(gameId, newRoundNumber);
+    await handleRoundTimeout(gameId, roundNumber);
   }, roundTimerMs);
 }
 
@@ -445,7 +453,8 @@ async function handleRoundTimeout(gameId, roundNumber) {
     include: { guesses: true },
   });
 
-  if (!round) return;
+  // Already revealed (everyone submitted before the timer ran out)
+  if (!round || round.endedAt) return;
 
   // Auto-skip players who didn't submit
   const submittedPlayerIds = new Set(round.guesses.map((g) => g.gamePlayerId));
@@ -480,7 +489,7 @@ async function revealRoundResults(gameId, roundNumber) {
     },
   });
 
-  if (!round) return;
+  if (!round || round.endedAt) return;
 
   // End the round
   await prisma.round.update({

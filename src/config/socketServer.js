@@ -52,6 +52,9 @@ function initSocketServer(httpServer) {
       }
 
       const decoded = jwt.verify(token, config.jwtSecret);
+      if (decoded.type !== "access") {
+        return next(new Error("Authentication failed"));
+      }
       const user = await prisma.user.findUnique({
         where: { id: decoded.userId },
         select: { id: true, displayName: true, subscriptionTier: true, ageVerified: true },

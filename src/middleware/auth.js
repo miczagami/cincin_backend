@@ -14,6 +14,10 @@ async function requireAuth(req, res, next) {
 
     const token = authHeader.split(" ")[1];
     const payload = jwt.verify(token, config.jwt.secret);
+    // Refresh / email-verification tokens share the secret but must not authenticate requests
+    if (payload.type !== "access") {
+      return res.status(401).json({ error: "Invalid token" });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
@@ -60,6 +64,7 @@ async function optionalAuth(req, res, next) {
 
     const token = authHeader.split(" ")[1];
     const payload = jwt.verify(token, config.jwt.secret);
+    if (payload.type !== "access") return next();
 
     req.user = await prisma.user.findUnique({
       where: { id: payload.userId },

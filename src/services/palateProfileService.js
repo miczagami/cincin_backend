@@ -513,8 +513,37 @@ async function generateWrappedCard(userId, { month, year } = {}) {
 }
 
 /**
- * Record a per-game accuracy snapshot after game completion.
- * Called from gameService.updatePalateStats() in Phase 4.
+ * Record a completed game in a player's palate profile:
+ * per-category stats (aggregate row + per-drink-type row) and the
+ * per-game accuracy snapshot used by the trend chart.
+ * Called once per registered player from gameService.endGame().
+ *
+ * @param {string} userId
+ * @param {string} gameId
+ * @param {{ drinkType: string|null, guesses: { category: string, isCorrect: boolean }[] }} results
+ */
+async function recordGameResults(userId, gameId, { drinkType, guesses }) {
+  if (guesses.length === 0) return; // opted out / skipped every turn — nothing to learn
+
+  const byCategory = new Map();
+  for (const { category, isCorrect } of guesses) {
+    const counts = byCategory.get(category) || { total: 0, correct: 0 };
+    counts.total += 1;
+    if (isCorrect) counts.correct += 1;
+    byCategory.set(category, counts);
+  }
+
+  for (const [category, counts] of byCategory) {
+    await addCategoryStats(userId, category, null, counts);
+    if (drinkType) await addCategoryStats(userId, category, drinkType, counts);
+  }
+
+  const correct = guesses.filter((g) => g.isCorrect).length;
+  await recordGameSnapshot(userId, gameId, { correct, total: guesses.length });
+}
+
+/**
+ * Record a per-game accuracy snapshot (percent) after game completion.
  */
 async function recordGameSnapshot(userId, gameId, { correct, total }) {
   const accuracy = total > 0 ? (correct / total) * 100 : 0;
@@ -533,55 +562,31 @@ async function recordGameSnapshot(userId, gameId, { correct, total }) {
 }
 
 /**
- * Update PalateCategory with drinkType dimension (Phase 4 enhancement).
- * Called after each game — updates both the aggregate and per-drinkType rows.
+ * Internal: add one game's guesses to a palate category row.
+ * drinkType null = the aggregate row across all drink types (what getCategoryAccuracy reads).
+ * Accuracy is stored as a percentage.
  */
-async function updateCategoryWithDrinkType(userId, category, drinkType, isCorrect) {
-  // Update aggregate row (drinkType = null)
-  await upsertCategoryStat(userId, category, null, isCorrect);
+async function addCategoryStats(userId, category, drinkType, { total, correct }) {
+  // findFirst rather than findUnique: the compound unique key can't express a NULL drinkType
+  const existing = await prisma.palateCategory.findFirst({
+    where: { userId, category, drinkType },
+  });
 
-  // Update per-drinkType row
-  if (drinkType) {
-    await upsertCategoryStat(userId, category, drinkType, isCorrect);
+  const totalGuesses = (existing?.totalGuesses || 0) + total;
+  const correctGuesses = (existing?.correctGuesses || 0) + correct;
+  const data = {
+    totalGuesses,
+    correctGuesses,
+    accuracy: (correctGuesses / totalGuesses) * 100,
+    gamesAppearedIn: (existing?.gamesAppearedIn || 0) + 1,
+    lastUpdated: new Date(),
+  };
+
+  if (existing) {
+    await prisma.palateCategory.update({ where: { id: existing.id }, data });
+  } else {
+    await prisma.palateCategory.create({ data: { userId, category, drinkType, ...data } });
   }
-}
-
-/**
- * Internal: upsert a palate category stat row.
- */
-async function upsertCategoryStat(userId, category, drinkType, isCorrect) {
-  const existing = await prisma.palateCategory.findUnique({
-    where: {
-      userId_category_drinkType: { userId, category, drinkType: drinkType || "" },
-    },
-  });
-
-  const totalGuesses = (existing?.totalGuesses || 0) + 1;
-  const correctGuesses = (existing?.correctGuesses || 0) + (isCorrect ? 1 : 0);
-  const accuracy = totalGuesses > 0 ? (correctGuesses / totalGuesses) * 100 : 0;
-
-  await prisma.palateCategory.upsert({
-    where: {
-      userId_category_drinkType: { userId, category, drinkType: drinkType || "" },
-    },
-    update: {
-      totalGuesses,
-      correctGuesses,
-      accuracy,
-      gamesAppearedIn: { increment: 0 }, // incremented separately per-game
-      lastUpdated: new Date(),
-    },
-    create: {
-      userId,
-      category,
-      drinkType: drinkType || null,
-      totalGuesses,
-      correctGuesses,
-      accuracy,
-      gamesAppearedIn: 1,
-      lastUpdated: new Date(),
-    },
-  });
 }
 
 // ─── Helpers ───
@@ -602,6 +607,5 @@ module.exports = {
   getProfile,
   getProgress,
   generateWrappedCard,
-  recordGameSnapshot,
-  updateCategoryWithDrinkType,
+  recordGameResults,
 };

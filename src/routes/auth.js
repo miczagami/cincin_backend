@@ -57,6 +57,24 @@ router.post("/password-reset", passwordResetRules, validate, async (req, res, ne
   } catch (err) { next(err); }
 });
 
+// POST /api/auth/verify-email — confirm an email address from the emailed link (no auth)
+router.post("/verify-email", async (req, res, next) => {
+  try {
+    const { token } = req.body ?? {};
+    if (!token) return res.status(400).json({ error: "Verification token required" });
+    const result = await authService.verifyEmail(token);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
+// POST /api/auth/verify-email/resend — email a new verification link
+router.post("/verify-email/resend", requireAuth, async (req, res, next) => {
+  try {
+    const result = await authService.resendVerificationEmail(req.user.id);
+    res.json(result);
+  } catch (err) { next(err); }
+});
+
 // POST /api/auth/change-password
 router.post("/change-password", requireAuth, changePasswordRules, validate, async (req, res, next) => {
   try {

@@ -5,6 +5,7 @@ const config = require("../config");
 const prisma = require("../config/database");
 const { AppError } = require("../utils/helpers");
 const { verifyIdToken } = require("./socialAuthService");
+const notificationService = require("./notificationService");
 
 const SALT_ROUNDS = 12;
 
@@ -39,7 +40,85 @@ async function signUp({ email, password, displayName }) {
   const tokens = generateTokens(user.id);
   await createSession(user.id, tokens.accessToken);
 
+  // Don't fail signup if the email can't be sent — the user can resend from Settings
+  await sendVerificationEmail(user).catch((err) =>
+    console.error("[Auth] Verification email failed:", err.message)
+  );
+
   return { user, ...tokens };
+}
+
+// ═══════════════════════════════════════════
+//  EMAIL VERIFICATION (Section 7.2)
+// ═══════════════════════════════════════════
+
+const EMAIL_VERIFY_EXPIRY = "24h";
+
+/**
+ * Email a verification link. The token is a signed JWT bound to the user's
+ * current email, so changing email invalidates outstanding links.
+ */
+async function sendVerificationEmail({ id, email }) {
+  const token = jwt.sign({ userId: id, email, type: "email_verify" }, config.jwt.secret, {
+    expiresIn: EMAIL_VERIFY_EXPIRY,
+  });
+
+  const sent = await notificationService.sendAccountEmail(email, {
+    type: "email_verification",
+    subject: "Verify your CinCin email",
+    heading: "Confirm your email",
+    body: "Tap the button below to verify your email address. The link expires in 24 hours.",
+    actionUrl: `${config.appUrl}/auth/verify-email?token=${encodeURIComponent(token)}`,
+    actionLabel: "Verify email",
+  });
+  if (!sent) throw new AppError("Could not send verification email. Please try again later.", 502);
+}
+
+/**
+ * Resend the verification email for the signed-in user.
+ */
+async function resendVerificationEmail(userId) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, emailVerified: true },
+  });
+  if (!user) throw new AppError("User not found", 404);
+  if (user.emailVerified) return { message: "Email already verified.", emailVerified: true };
+
+  await sendVerificationEmail(user);
+  return { message: "Verification email sent.", emailVerified: false };
+}
+
+/**
+ * Verify an email address from a link token.
+ */
+async function verifyEmail(token) {
+  let payload;
+  try {
+    payload = jwt.verify(token, config.jwt.secret);
+  } catch {
+    throw new AppError("This verification link is invalid or has expired.", 400);
+  }
+  if (payload.type !== "email_verify") {
+    throw new AppError("This verification link is invalid or has expired.", 400);
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: payload.userId },
+    select: { id: true, email: true, emailVerified: true, deletedAt: true },
+  });
+  if (!user || user.deletedAt || user.email !== payload.email) {
+    throw new AppError("This verification link is invalid or has expired.", 400);
+  }
+
+  if (!user.emailVerified) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: true, emailVerifiedAt: new Date() },
+    });
+  }
+
+  return { message: "Email verified.", emailVerified: true };
 }
 
 /**
@@ -148,11 +227,21 @@ async function requestPasswordReset(email) {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
+  // Only a hash is stored, so a database leak doesn't expose usable reset links
   await prisma.passwordReset.create({
-    data: { userId: user.id, token, expiresAt },
+    data: { userId: user.id, token: hashToken(token), expiresAt },
   });
 
-  // TODO: Send email with reset link
+  const sent = await notificationService.sendAccountEmail(user.email, {
+    type: "password_reset",
+    subject: "Reset your CinCin password",
+    heading: "Reset your password",
+    body: "Someone asked to reset the password for this account. If it was you, tap the button below — the link expires in 1 hour. If not, you can ignore this email.",
+    actionUrl: `${config.appUrl}/auth/forgot-password?token=${token}`,
+    actionLabel: "Reset password",
+  });
+  if (!sent) console.error(`[Auth] Password reset email to user ${user.id} failed`);
+
   return { message: "If that email exists, a reset link has been sent." };
 }
 
@@ -160,7 +249,7 @@ async function requestPasswordReset(email) {
  * Reset password using token.
  */
 async function resetPassword({ token, newPassword }) {
-  const reset = await prisma.passwordReset.findUnique({ where: { token } });
+  const reset = await prisma.passwordReset.findUnique({ where: { token: hashToken(token) } });
 
   if (!reset || reset.usedAt || reset.expiresAt < new Date()) {
     throw new AppError("Invalid or expired reset token", 400);
@@ -262,6 +351,10 @@ async function logout(token) {
 
 // ─── Internal helpers ───
 
+function hashToken(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
 function generateTokens(userId) {
   const accessToken = jwt.sign(
     { userId, type: "access" },
@@ -296,6 +389,8 @@ module.exports = {
   requestPasswordReset,
   resetPassword,
   changePassword,
+  resendVerificationEmail,
+  verifyEmail,
   refreshToken,
   logout,
 };

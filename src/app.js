@@ -21,7 +21,7 @@ const isWebhook = (req) => WEBHOOK_PATHS.includes(req.originalUrl.split("?")[0])
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  max: config.rateLimit.max,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests. Please try again later." },
@@ -32,7 +32,7 @@ app.use("/api/", limiter);
 // Stricter limit for auth endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: config.rateLimit.authMax,
   message: { error: "Too many authentication attempts. Please try again later." },
   skip: isWebhook,
 });

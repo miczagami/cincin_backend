@@ -356,16 +356,18 @@ function hashToken(token) {
 }
 
 function generateTokens(userId) {
+  // jwtid makes every token unique — without it, two tokens issued in the same second
+  // are identical and collide on the unique sessions.token column
   const accessToken = jwt.sign(
     { userId, type: "access" },
     config.jwt.secret,
-    { expiresIn: config.jwt.expiresIn }
+    { expiresIn: config.jwt.expiresIn, jwtid: crypto.randomUUID() }
   );
 
   const refreshToken = jwt.sign(
     { userId, type: "refresh" },
     config.jwt.secret,
-    { expiresIn: config.jwt.refreshExpiresIn }
+    { expiresIn: config.jwt.refreshExpiresIn, jwtid: crypto.randomUUID() }
   );
 
   return { accessToken, refreshToken };

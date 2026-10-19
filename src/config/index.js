@@ -30,6 +30,12 @@ module.exports = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "1h",
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
 
+  // Per-IP request limits per 15 minutes (all /api routes, and /api/auth on top)
+  rateLimit: {
+    max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 100,
+    authMax: parseInt(process.env.AUTH_RATE_LIMIT_MAX, 10) || 20,
+  },
+
   // Social login — OAuth client IDs accepted as ID token audiences (comma-separated)
   social: {
     googleClientIds: (process.env.GOOGLE_CLIENT_IDS || "").split(",").map((s) => s.trim()).filter(Boolean),

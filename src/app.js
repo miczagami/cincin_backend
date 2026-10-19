@@ -15,12 +15,17 @@ app.use(cors({
 }));
 
 // ─── Rate limiting ───
+// Provider webhooks are signature-checked and must not be throttled by per-IP limits
+const WEBHOOK_PATHS = ["/api/subscription/webhook", "/api/auth/age-verify/webhook"];
+const isWebhook = (req) => WEBHOOK_PATHS.includes(req.originalUrl.split("?")[0]);
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests. Please try again later." },
+  skip: isWebhook,
 });
 app.use("/api/", limiter);
 
@@ -29,15 +34,13 @@ const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
   message: { error: "Too many authentication attempts. Please try again later." },
+  skip: isWebhook,
 });
 app.use("/api/auth/", authLimiter);
 
-// ─── Stripe webhook needs raw body — mount BEFORE json parsing ───
-// (Section 8.2: Stripe verifies webhook signatures against the raw body)
-app.use(
-  "/api/subscription/webhook",
-  express.raw({ type: "application/json" })
-);
+// ─── Webhooks need the raw body — mount BEFORE json parsing ───
+// (Stripe and the age-verification provider sign the exact bytes they send)
+app.use(WEBHOOK_PATHS, express.raw({ type: "*/*" }));
 
 // ─── Body parsing ───
 app.use(express.json({ limit: "10mb" })); // 10mb for image uploads

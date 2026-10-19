@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const config = require("../config");
 const prisma = require("../config/database");
 const { AppError } = require("../utils/helpers");
+const { verifyIdToken } = require("./socialAuthService");
 
 const SALT_ROUNDS = 12;
 
@@ -84,27 +85,33 @@ async function login({ email, password }) {
 
 /**
  * Social login / registration (Google or Apple) — Section 7.1.
- * Creates account if it doesn't exist, logs in if it does.
+ * Identity comes only from the verified provider ID token.
+ * Creates an account if none exists, logs in if it does.
  */
-async function socialLogin({ provider, socialProviderId, email, displayName }) {
+async function socialLogin({ provider, token, displayName }) {
+  const identity = await verifyIdToken(provider, token);
+
+  // 1. Returning social user
   let user = await prisma.user.findFirst({
-    where: {
-      OR: [
-        { email },
-        { socialProviderId, authProvider: provider },
-      ],
-    },
+    where: { authProvider: provider, socialProviderId: identity.providerUserId },
   });
 
+  // 2. Existing account with the same email — only trust a provider-verified email
+  if (!user && identity.email && identity.emailVerified) {
+    user = await prisma.user.findUnique({ where: { email: identity.email } });
+  }
+
   if (!user) {
-    // New user via social login
+    if (!identity.email || !identity.emailVerified) {
+      throw new AppError("A verified email is required to create an account", 400);
+    }
     user = await prisma.user.create({
       data: {
-        email,
-        displayName: displayName || email.split("@")[0],
+        email: identity.email,
+        displayName: (displayName || identity.name || identity.email.split("@")[0]).slice(0, 50),
         authProvider: provider,
-        socialProviderId,
-        emailVerified: true, // social providers verify email
+        socialProviderId: identity.providerUserId,
+        emailVerified: true, // verified by the provider
         emailVerifiedAt: new Date(),
       },
     });

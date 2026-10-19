@@ -26,6 +26,8 @@ model User {
   dateOfBirth       DateTime?
   ageVerified       Boolean   @default(false)
   ageVerifiedAt     DateTime?
+  ageVerifyRef      String?   @unique // provider-side reference (e.g. Onfido applicant ID) for the pending check
+  ageVerifyRegion   String?   // region the check was started for — sets the required age
   emailVerified     Boolean   @default(false)
   emailVerifiedAt   DateTime?
 

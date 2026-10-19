@@ -6,6 +6,11 @@
 
 require("dotenv").config();
 
+// Tokens signed with the dev fallback secret could be forged by anyone who has read this file
+if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET must be set in production");
+}
+
 module.exports = {
   env: process.env.NODE_ENV || "development",
   port: parseInt(process.env.PORT, 10) || 4000,
@@ -24,6 +29,12 @@ module.exports = {
   jwtSecret: process.env.JWT_SECRET || "dev-secret-change-me",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "1h",
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
+
+  // Social login — OAuth client IDs accepted as ID token audiences (comma-separated)
+  social: {
+    googleClientIds: (process.env.GOOGLE_CLIENT_IDS || "").split(",").map((s) => s.trim()).filter(Boolean),
+    appleClientIds: (process.env.APPLE_CLIENT_IDS || "").split(",").map((s) => s.trim()).filter(Boolean),
+  },
 
   // Database
   databaseUrl: process.env.DATABASE_URL,

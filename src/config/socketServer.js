@@ -9,10 +9,10 @@
  */
 
 const { Server } = require("socket.io");
-const jwt = require("jsonwebtoken");
 const config = require("./index");
 const prisma = require("./database");
 const { getRedisClient, isRedisConnected } = require("./redis");
+const { authenticateAccessToken } = require("../middleware/auth");
 
 let io = null;
 
@@ -51,14 +51,9 @@ function initSocketServer(httpServer) {
         return next(new Error("Authentication required"));
       }
 
-      const decoded = jwt.verify(token, config.jwtSecret);
-      if (decoded.type !== "access") {
-        return next(new Error("Authentication failed"));
-      }
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
-        select: { id: true, displayName: true, subscriptionTier: true, ageVerified: true },
-      });
+      // Same check as REST requests: valid access token with a live session
+      const auth = await authenticateAccessToken(token);
+      const user = auth?.user;
 
       if (!user || !user.ageVerified) {
         return next(new Error("Invalid or unverified user"));

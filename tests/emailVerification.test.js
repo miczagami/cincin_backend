@@ -6,7 +6,7 @@ const jwt = require("jsonwebtoken");
 
 jest.mock("../src/config/database", () => ({
   user: { findUnique: jest.fn(), update: jest.fn(), create: jest.fn() },
-  session: { create: jest.fn() },
+  session: { create: jest.fn(), deleteMany: jest.fn(), findUnique: jest.fn() },
   passwordReset: { create: jest.fn(), findUnique: jest.fn() },
 }));
 jest.mock("../src/services/notificationService", () => ({ sendAccountEmail: jest.fn(async () => true) }));
@@ -101,15 +101,35 @@ describe("requireAuth", () => {
     return { res, next };
   };
 
+  const liveSession = { userId: "u1", expiresAt: new Date(Date.now() + 60_000), user: { id: "u1", deletedAt: null } };
+
   test.each(["refresh", "email_verify"])("rejects %s tokens", async (type) => {
-    const { res, next } = await run(jwt.sign({ userId: "u1", type }, config.jwt.secret));
+    prisma.session.findUnique.mockResolvedValue(liveSession);
+    const { res, next } = await run(jwt.sign({ userId: "u1", sid: "s1", type }, config.jwt.secret));
     expect(res.status).toHaveBeenCalledWith(401);
     expect(next).not.toHaveBeenCalled();
   });
 
-  test("accepts access tokens", async () => {
-    prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", deletedAt: null });
-    const { next } = await run(jwt.sign({ userId: "u1", type: "access" }, config.jwt.secret));
+  test("accepts access tokens with a live session", async () => {
+    prisma.session.findUnique.mockResolvedValueOnce(liveSession);
+    const { next } = await run(jwt.sign({ userId: "u1", sid: "s1", type: "access" }, config.jwt.secret));
+    expect(prisma.session.findUnique).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "s1" } }));
     expect(next).toHaveBeenCalledWith();
+  });
+
+  test.each([
+    ["revoked", null],
+    ["expired", { ...liveSession, expiresAt: new Date(Date.now() - 1000) }],
+    ["someone else's", { ...liveSession, userId: "u2" }],
+  ])("rejects access tokens whose session is %s", async (_label, session) => {
+    prisma.session.findUnique.mockResolvedValueOnce(session);
+    const { res, next } = await run(jwt.sign({ userId: "u1", sid: "s1", type: "access" }, config.jwt.secret));
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("rejects access tokens issued before sessions carried an id", async () => {
+    const { res } = await run(jwt.sign({ userId: "u1", type: "access" }, config.jwt.secret));
+    expect(res.status).toHaveBeenCalledWith(401);
   });
 });

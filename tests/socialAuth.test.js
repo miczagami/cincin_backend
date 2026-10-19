@@ -5,7 +5,7 @@ const { generateKeyPair, exportJWK, SignJWT, createLocalJWKSet } = require("jose
 
 jest.mock("../src/config/database", () => ({
   user: { findFirst: jest.fn(), findUnique: jest.fn(), create: jest.fn() },
-  session: { create: jest.fn() },
+  session: { create: jest.fn(), deleteMany: jest.fn() },
 }));
 
 const prisma = require("../src/config/database");

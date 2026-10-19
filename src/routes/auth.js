@@ -78,8 +78,7 @@ router.post("/verify-email/resend", requireAuth, async (req, res, next) => {
 // POST /api/auth/change-password
 router.post("/change-password", requireAuth, changePasswordRules, validate, async (req, res, next) => {
   try {
-    const currentToken = req.headers.authorization.split(" ")[1];
-    const result = await authService.changePassword(req.user.id, req.body, currentToken);
+    const result = await authService.changePassword(req.user.id, req.body, req.sessionId);
     res.json(result);
   } catch (err) { next(err); }
 });
@@ -87,8 +86,7 @@ router.post("/change-password", requireAuth, changePasswordRules, validate, asyn
 // POST /api/auth/logout
 router.post("/logout", requireAuth, async (req, res, next) => {
   try {
-    const token = req.headers.authorization.split(" ")[1];
-    const result = await authService.logout(token);
+    const result = await authService.logout(req.sessionId);
     res.json(result);
   } catch (err) { next(err); }
 });

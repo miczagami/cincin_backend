@@ -37,8 +37,7 @@ async function signUp({ email, password, displayName }) {
     },
   });
 
-  const tokens = generateTokens(user.id);
-  await createSession(user.id, tokens.accessToken);
+  const tokens = await startSession(user.id);
 
   // Don't fail signup if the email can't be sent — the user can resend from Settings
   await sendVerificationEmail(user).catch((err) =>
@@ -155,8 +154,7 @@ async function login({ email, password }) {
     throw new AppError("Invalid email or password", 401);
   }
 
-  const tokens = generateTokens(user.id);
-  await createSession(user.id, tokens.accessToken);
+  const tokens = await startSession(user.id);
 
   const { passwordHash, deletedAt, ...safeUser } = user;
   return { user: safeUser, ...tokens };
@@ -198,8 +196,7 @@ async function socialLogin({ provider, token, displayName }) {
     throw new AppError("This account has been deleted", 401);
   }
 
-  const tokens = generateTokens(user.id);
-  await createSession(user.id, tokens.accessToken);
+  const tokens = await startSession(user.id);
 
   return {
     user: {
@@ -277,7 +274,7 @@ async function resetPassword({ token, newPassword }) {
  * Change password for an authenticated email/password user.
  * Invalidates all other sessions, keeping the current one.
  */
-async function changePassword(userId, { currentPassword, newPassword }, currentToken) {
+async function changePassword(userId, { currentPassword, newPassword }, currentSessionId) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, passwordHash: true, authProvider: true, deletedAt: true },
@@ -304,8 +301,9 @@ async function changePassword(userId, { currentPassword, newPassword }, currentT
       where: { id: userId },
       data: { passwordHash },
     }),
+    // Sign out every other device; this one stays signed in
     prisma.session.deleteMany({
-      where: { userId, token: { not: currentToken } },
+      where: { userId, id: { not: currentSessionId } },
     }),
   ]);
 
@@ -313,39 +311,50 @@ async function changePassword(userId, { currentPassword, newPassword }, currentT
 }
 
 /**
- * Refresh access token.
+ * Exchange a refresh token for a new token pair (rotation).
+ * Each refresh token works once: presenting an already-used one means it was
+ * copied, so the whole session is revoked.
  */
 async function refreshToken(refreshTokenStr) {
+  let payload;
   try {
-    const payload = jwt.verify(refreshTokenStr, config.jwt.secret);
-    if (payload.type !== "refresh") {
-      throw new AppError("Invalid refresh token", 401);
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
-      select: { id: true, deletedAt: true },
-    });
-
-    if (!user || user.deletedAt) {
-      throw new AppError("User not found", 401);
-    }
-
-    const tokens = generateTokens(user.id);
-    await createSession(user.id, tokens.accessToken);
-
-    return tokens;
-  } catch (err) {
-    if (err instanceof AppError) throw err;
+    payload = jwt.verify(refreshTokenStr, config.jwt.secret);
+  } catch {
     throw new AppError("Invalid refresh token", 401);
   }
+  if (payload.type !== "refresh" || !payload.sid) {
+    throw new AppError("Invalid refresh token", 401);
+  }
+
+  const session = await prisma.session.findUnique({
+    where: { id: payload.sid },
+    include: { user: { select: { id: true, deletedAt: true } } },
+  });
+
+  if (!session || session.userId !== payload.userId || session.expiresAt < new Date() || session.user.deletedAt) {
+    throw new AppError("Session expired. Please log in again.", 401);
+  }
+
+  if (session.token !== hashToken(refreshTokenStr)) {
+    await prisma.session.deleteMany({ where: { id: session.id } });
+    console.warn(`[Auth] Refresh token reuse for session ${session.id} — session revoked`);
+    throw new AppError("Session expired. Please log in again.", 401);
+  }
+
+  const tokens = generateTokens(session.userId, session.id);
+  await prisma.session.update({
+    where: { id: session.id },
+    data: { token: hashToken(tokens.refreshToken), expiresAt: refreshExpiry(tokens.refreshToken) },
+  });
+
+  return tokens;
 }
 
 /**
- * Logout — remove session.
+ * Logout — revoke this device's session (its access and refresh tokens stop working).
  */
-async function logout(token) {
-  await prisma.session.deleteMany({ where: { token } });
+async function logout(sessionId) {
+  await prisma.session.deleteMany({ where: { id: sessionId } });
   return { message: "Logged out" };
 }
 
@@ -355,17 +364,19 @@ function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-function generateTokens(userId) {
-  // jwtid makes every token unique — without it, two tokens issued in the same second
-  // are identical and collide on the unique sessions.token column
+/**
+ * Sign an access + refresh token pair bound to a session (sid).
+ * jwtid keeps tokens issued in the same second distinct.
+ */
+function generateTokens(userId, sessionId) {
   const accessToken = jwt.sign(
-    { userId, type: "access" },
+    { userId, sid: sessionId, type: "access" },
     config.jwt.secret,
     { expiresIn: config.jwt.expiresIn, jwtid: crypto.randomUUID() }
   );
 
   const refreshToken = jwt.sign(
-    { userId, type: "refresh" },
+    { userId, sid: sessionId, type: "refresh" },
     config.jwt.secret,
     { expiresIn: config.jwt.refreshExpiresIn, jwtid: crypto.randomUUID() }
   );
@@ -373,15 +384,27 @@ function generateTokens(userId) {
   return { accessToken, refreshToken };
 }
 
-async function createSession(userId, token) {
-  const decoded = jwt.decode(token);
+const refreshExpiry = (refreshToken) => new Date(jwt.decode(refreshToken).exp * 1000);
+
+/**
+ * Start a session for a new sign-in. The session lives as long as its refresh
+ * token; only a hash of the current refresh token is stored.
+ */
+async function startSession(userId) {
+  // Housekeeping: drop this user's expired sessions
+  await prisma.session.deleteMany({ where: { userId, expiresAt: { lt: new Date() } } });
+
+  const sessionId = crypto.randomUUID();
+  const tokens = generateTokens(userId, sessionId);
   await prisma.session.create({
     data: {
+      id: sessionId,
       userId,
-      token,
-      expiresAt: new Date(decoded.exp * 1000),
+      token: hashToken(tokens.refreshToken),
+      expiresAt: refreshExpiry(tokens.refreshToken),
     },
   });
+  return tokens;
 }
 
 module.exports = {

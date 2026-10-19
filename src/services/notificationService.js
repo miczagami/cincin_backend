@@ -22,8 +22,9 @@ let _sgMail = null;
 
 /**
  * Initialise Firebase Admin SDK (singleton).
- * Requires FIREBASE_SERVICE_ACCOUNT env var containing either:
- *   - A JSON string of the service account credentials, OR
+ * Requires FIREBASE_SERVICE_ACCOUNT env var containing one of:
+ *   - A JSON string of the service account credentials
+ *   - The same JSON, base64-encoded
  *   - A file path to the service account JSON file
  */
 function getFirebaseAdmin() {
@@ -38,11 +39,15 @@ function getFirebaseAdmin() {
 
   let credential;
   try {
-    // Try parsing as JSON string first
-    const serviceAccount =
-      typeof serviceAccountRaw === "string" && serviceAccountRaw.startsWith("{")
-        ? JSON.parse(serviceAccountRaw)
-        : require(serviceAccountRaw); // Treat as file path
+    // JSON string, base64-encoded JSON (for hosts that mangle multi-line or comma-laden
+    // env values), or a file path
+    const raw = serviceAccountRaw.trim();
+    const decoded = Buffer.from(raw, "base64").toString("utf8").trim();
+    const serviceAccount = raw.startsWith("{")
+      ? JSON.parse(raw)
+      : decoded.startsWith("{")
+        ? JSON.parse(decoded)
+        : require(raw);
 
     credential = admin.credential.cert(serviceAccount);
   } catch (err) {

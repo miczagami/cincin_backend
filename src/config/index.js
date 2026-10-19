@@ -30,6 +30,11 @@ module.exports = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "1h",
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
 
+  // Request header holding the real client IP, set by the proxy in front of the API
+  // (Sevalla/Cloudflare: cf-connecting-ip). Rate limits key on it. Only set it when every
+  // request reaches the API through that proxy — otherwise clients can spoof it.
+  clientIpHeader: process.env.CLIENT_IP_HEADER ? process.env.CLIENT_IP_HEADER.trim().toLowerCase() : null,
+
   // Per-IP request limits per 15 minutes (all /api routes, and /api/auth on top)
   rateLimit: {
     max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 100,

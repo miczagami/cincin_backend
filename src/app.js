@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
-const rateLimit = require("express-rate-limit");
+const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
 const config = require("./config");
 const { errorHandler, notFoundHandler } = require("./middleware/errorHandler");
 
@@ -19,13 +19,23 @@ app.use(cors({
 const WEBHOOK_PATHS = ["/api/subscription/webhook", "/api/auth/age-verify/webhook"];
 const isWebhook = (req) => WEBHOOK_PATHS.includes(req.originalUrl.split("?")[0]);
 
+// Behind a proxy every request arrives from the proxy's address, so key on the
+// client IP header it sets — otherwise all users would share one limit
+const clientIp = (req) =>
+  (config.clientIpHeader && req.get(config.clientIpHeader)?.split(",")[0].trim()) || req.ip;
+const limitOptions = {
+  keyGenerator: (req) => ipKeyGenerator(clientIp(req)),
+  validate: { xForwardedForHeader: !config.clientIpHeader },
+  skip: isWebhook,
+};
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: config.rateLimit.max,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Too many requests. Please try again later." },
-  skip: isWebhook,
+  ...limitOptions,
 });
 app.use("/api/", limiter);
 
@@ -34,7 +44,7 @@ const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: config.rateLimit.authMax,
   message: { error: "Too many authentication attempts. Please try again later." },
-  skip: isWebhook,
+  ...limitOptions,
 });
 app.use("/api/auth/", authLimiter);
 

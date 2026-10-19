@@ -13,17 +13,20 @@ router.post("/initiate", requireAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// POST /api/auth/age-verify/webhook — provider callback (no auth — webhook)
-router.post("/webhook", express.raw({ type: "application/json" }), async (req, res, next) => {
+// POST /api/auth/age-verify/submit — user finished the provider SDK flow; start the check
+router.post("/submit", requireAuth, async (req, res, next) => {
   try {
-    const signature = req.headers["x-onfido-signature"]
-      || req.headers["x-jumio-signature"]
-      || req.headers["x-signature"]
-      || "";
+    const result = await ageVerifyService.submitVerification(req.user.id);
+    res.json(result);
+  } catch (err) { next(err); }
+});
 
-    const payload = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
-
-    const result = await ageVerifyService.processWebhook(payload, signature);
+// POST /api/auth/age-verify/webhook — provider callback (no auth — signature-checked)
+// app.js mounts express.raw for this path so the signature covers the exact bytes sent
+router.post("/webhook", async (req, res, next) => {
+  try {
+    const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
+    const result = await ageVerifyService.processWebhook(rawBody, req.headers);
     res.json({ received: true, ...result });
   } catch (err) { next(err); }
 });

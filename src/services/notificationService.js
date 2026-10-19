@@ -603,6 +603,56 @@ async function sendEmailNotification(email, { title, body, data, type }) {
 }
 
 /**
+ * Send an account email with a single action link (verify email, reset password).
+ * Unlike notification emails these bypass preferences, and click tracking is off
+ * so the token link isn't rewritten. Without SendGrid outside production the link
+ * is logged instead, so the flow can be completed locally.
+ * @returns {Promise<boolean>} whether the email was sent (or logged)
+ */
+async function sendAccountEmail(email, { type, subject, heading, body, actionUrl, actionLabel }) {
+  if (!config.email.sendgridApiKey && config.env !== "production") {
+    console.log(`[Email Mock] → ${email} | ${subject} | ${actionUrl}`);
+    return true;
+  }
+
+  try {
+    await getSendGrid().send({
+      to: email,
+      from: {
+        email: config.email.fromAddress || "noreply@getcincin.com",
+        name: config.email.fromName || "CinCin",
+      },
+      subject,
+      text: `${body}\n\n${actionLabel}: ${actionUrl}`,
+      html: emailWrapper(`
+    <h1 style="font-size:22px;font-weight:900;color:#FFFFFF;margin:0 0 16px;">
+      ${heading}
+    </h1>
+    <p style="font-size:14px;color:#D4D4D4;line-height:1.6;margin:0 0 24px;">
+      ${body}
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center">
+          <a href="${actionUrl}" class="btn">${actionLabel}</a>
+        </td>
+      </tr>
+    </table>
+  `),
+      mailSettings: { sandboxMode: { enable: config.env === "test" } },
+      trackingSettings: { clickTracking: { enable: false }, openTracking: { enable: false } },
+      categories: ["account", type],
+    });
+    console.log(`[Email] Sent to ${email} | ${type}`);
+    return true;
+  } catch (err) {
+    console.error(`[Email] ${type} send failed:`, err.message);
+    return false;
+  }
+}
+
+/**
  * Map notification type → SendGrid Dynamic Template ID.
  * These template IDs must be created in the SendGrid dashboard.
  * Falls back to inline HTML if no template is configured.
@@ -1102,6 +1152,7 @@ module.exports = {
   createNotification,
   sendPushNotification,
   sendEmailNotification,
+  sendAccountEmail,
   registerPushToken,
   removePushToken,
   getNotifications,

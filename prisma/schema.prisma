@@ -26,6 +26,8 @@ model User {
   dateOfBirth       DateTime?
   ageVerified       Boolean   @default(false)
   ageVerifiedAt     DateTime?
+  ageVerifyRef      String?   @unique // provider-side reference (e.g. Onfido applicant ID) for the pending check
+  ageVerifyRegion   String?   // region the check was started for — sets the required age
   emailVerified     Boolean   @default(false)
   emailVerifiedAt   DateTime?
 
@@ -187,9 +189,10 @@ model BottleScan {
   id         String   @id @default(cuid())
   userId     String
   bottleId   String?  // null if AI couldn't match
-  method     ScanMethod
+  inputMethod ScanMethod
   confidence Float?
-  rawResult  Json?    // raw AI response for debugging
+  rawImageUrl String?
+  aiResponse Json?    // raw AI response for debugging
   createdAt  DateTime @default(now())
 
   user   User    @relation(fields: [userId], references: [id])
@@ -318,6 +321,7 @@ model Game {
 
   // Phase 2: Sharing
   shareToken       String?      @unique
+  lobbyExpiresAt   DateTime?
 
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
@@ -343,7 +347,7 @@ model GamePlayer {
   id           String           @id @default(cuid())
   gameId       String
   userId       String
-  joinOrder    Int              @default(0)
+  playerOrder  Int              @default(0)
   totalScore   Int              @default(0)
   status       GamePlayerStatus @default(ACTIVE)
   optedOutAt   DateTime?
@@ -351,6 +355,8 @@ model GamePlayer {
   // Phase 3: WebSocket session tracking
   socketId     String?
   lastPingAt   DateTime?
+  disconnectedAt DateTime?
+  reconnectedAt  DateTime?
 
   game     Game    @relation(fields: [gameId], references: [id], onDelete: Cascade)
   user     User    @relation(fields: [userId], references: [id])
@@ -366,7 +372,7 @@ model GuestPlayer {
   id           String @id @default(cuid())
   gameId       String
   displayName  String
-  joinOrder    Int    @default(0)
+  playerOrder  Int    @default(0)
   totalScore   Int    @default(0)
   status       GamePlayerStatus @default(ACTIVE)
   optedOutAt   DateTime?
@@ -381,14 +387,15 @@ model GuestPlayer {
 model Round {
   id        String @id @default(cuid())
   gameId    String
-  number    Int
+  roundNumber Int
   createdAt DateTime @default(now())
+  endedAt   DateTime?
 
   game    Game    @relation(fields: [gameId], references: [id], onDelete: Cascade)
   guesses Guess[]
   guestGuesses GuestGuess[]
 
-  @@unique([gameId, number])
+  @@unique([gameId, roundNumber])
   @@index([gameId])
   @@map("rounds")
 }
@@ -399,9 +406,10 @@ model Guess {
   gamePlayerId  String
   tastingNoteId String?       // null if wrong guess
   guessText     String
-  matchType     GuessMatchType?
+  matchedVia    GuessMatchType?
   isSpecific    Boolean       @default(false)
-  points        Int           @default(0)
+  isCorrect     Boolean       @default(false)
+  pointsAwarded Int           @default(0)
   aiEvaluation  Json?         // stores AI reasoning for free-text evaluation
   createdAt     DateTime      @default(now())
 
@@ -421,9 +429,10 @@ model GuestGuess {
   guestPlayerId String
   tastingNoteId String?
   guessText     String
-  matchType     GuessMatchType?
+  matchedVia    GuessMatchType?
   isSpecific    Boolean       @default(false)
-  points        Int           @default(0)
+  isCorrect     Boolean       @default(false)
+  pointsAwarded Int           @default(0)
   aiEvaluation  Json?
   createdAt     DateTime      @default(now())
 
@@ -439,7 +448,7 @@ model GuestGuess {
 model OfflineSyncQueue {
   id           String   @id @default(cuid())
   userId       String
-  gameData     Json
+  gamePayload  Json
   status       String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
   error        String?
   processedAt  DateTime?

@@ -99,16 +99,11 @@ router.post(
   async (req, res) => {
     const sig = req.headers["stripe-signature"];
 
-    if (!config.stripe.webhookSecret) {
-      console.warn("[Subscription] Webhook secret not configured — processing without verification");
-      try {
-        const event = JSON.parse(req.body.toString());
-        await subscriptionService.handleWebhookEvent(event);
-        return res.json({ received: true });
-      } catch (err) {
-        console.error("[Subscription] Webhook error:", err.message);
-        return res.status(400).json({ error: err.message });
-      }
+    // Never act on an unsigned event — anyone could forge a subscription upgrade.
+    // (Mock mode activates subscriptions directly and doesn't use this webhook.)
+    if (!config.stripe.webhookSecret || !config.stripe.secretKey) {
+      console.error("[Subscription] Webhook received but STRIPE_WEBHOOK_SECRET / STRIPE_SECRET_KEY not configured — rejected");
+      return res.status(503).json({ error: "Webhook not configured" });
     }
 
     try {

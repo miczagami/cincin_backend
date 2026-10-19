@@ -22,6 +22,10 @@ const { AppError } = require("../utils/helpers");
  */
 function getStripe() {
   if (!config.stripe.secretKey) {
+    // Mock mode grants Pro without payment, so it must never run in production
+    if (config.env === "production") {
+      throw new AppError("Payments are not configured", 503);
+    }
     console.warn("[Subscription] STRIPE_SECRET_KEY not set — running in mock mode");
     return null;
   }

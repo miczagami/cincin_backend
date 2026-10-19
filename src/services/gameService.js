@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const prisma = require("../config/database");
 const config = require("../config");
+const palateProfileService = require("./palateProfileService");
 const {
   generateCode, calculatePoints, getNoteCountRange, AppError,
 } = require("../utils/helpers");
@@ -844,7 +845,10 @@ async function advanceRound(gameId, hostId) {
     where: { id: gameId },
     include: {
       bottle: { include: { tastingNotes: true } },
-      players: { orderBy: { playerOrder: "asc" } },
+      players: {
+        include: { user: { select: { displayName: true } } },
+        orderBy: { playerOrder: "asc" },
+      },
       guestPlayers: { orderBy: { playerOrder: "asc" } },
     },
   });
@@ -1004,13 +1008,19 @@ async function autoSkipTurn(gameId, hostId, { isGuest = false, guestPlayerId = n
 // ═══════════════════════════════════════════
 
 async function endGame(gameId, reason) {
-  const game = await prisma.game.update({
-    where: { id: gameId },
+  // Only the call that actually completes the game records palate stats
+  // (REST and socket paths can both try to end the same game)
+  const { count: transitioned } = await prisma.game.updateMany({
+    where: { id: gameId, status: { not: "COMPLETED" } },
     data: {
       status: "COMPLETED",
       endedAt: new Date(),
       endReason: reason,
     },
+  });
+
+  const game = await prisma.game.findUnique({
+    where: { id: gameId },
     include: {
       bottle: {
         include: { tastingNotes: true, affiliateLinks: true },
@@ -1037,8 +1047,10 @@ async function endGame(gameId, reason) {
     },
   });
 
-  // Phase 2: Update palate profile stats for registered players
-  await updatePalateStats(game);
+  if (!game) throw new AppError("Game not found", 404);
+
+  // Update palate profile stats + trend snapshots for registered players
+  if (transitioned) await updatePalateStats(game);
 
   return game;
 }
@@ -1268,11 +1280,14 @@ async function getGameHistory(userId, { limit = 20, offset = 0 } = {}) {
 // ═══════════════════════════════════════════
 
 /**
- * After a game ends, update each registered player's palate profile stats.
- * Categorises each guess by its generic flavour category and updates accuracy.
+ * After a game ends, record each registered player's guesses in their palate profile.
+ * Categorises each guess by its generic flavour category; palateProfileService
+ * stores the category stats and the per-game trend snapshot.
  */
 async function updatePalateStats(game) {
   for (const player of game.players) {
+    const guesses = [];
+
     for (const guess of player.guesses) {
       if (guess.guessText === "[auto-skip]") continue;
 
@@ -1296,42 +1311,13 @@ async function updatePalateStats(game) {
         }
       }
 
-      if (!category) continue;
-
-      await prisma.palateCategory.upsert({
-        where: {
-          userId_category: { userId: player.userId, category: category.toLowerCase() },
-        },
-        update: {
-          totalGuesses: { increment: 1 },
-          correctGuesses: { increment: guess.isCorrect ? 1 : 0 },
-          accuracy: {
-            // Will be recalculated below
-            set: 0,
-          },
-          lastUpdated: new Date(),
-        },
-        create: {
-          userId: player.userId,
-          category: category.toLowerCase(),
-          totalGuesses: 1,
-          correctGuesses: guess.isCorrect ? 1 : 0,
-          accuracy: guess.isCorrect ? 1.0 : 0.0,
-          lastUpdated: new Date(),
-        },
-      });
-
-      // Recalculate accuracy
-      const stat = await prisma.palateCategory.findUnique({
-        where: { userId_category: { userId: player.userId, category: category.toLowerCase() } },
-      });
-      if (stat && stat.totalGuesses > 0) {
-        await prisma.palateCategory.update({
-          where: { id: stat.id },
-          data: { accuracy: stat.correctGuesses / stat.totalGuesses },
-        });
-      }
+      if (category) guesses.push({ category: category.toLowerCase(), isCorrect: guess.isCorrect });
     }
+
+    await palateProfileService.recordGameResults(player.userId, game.id, {
+      drinkType: game.bottle.category,
+      guesses,
+    });
   }
 }
 

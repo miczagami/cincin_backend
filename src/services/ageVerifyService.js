@@ -1,4 +1,6 @@
+const crypto = require("crypto");
 const prisma = require("../config/database");
+const config = require("../config");
 const { AppError } = require("../utils/helpers");
 
 // ═══════════════════════════════════════════════════════════════
@@ -7,8 +9,15 @@ const { AppError } = require("../utils/helpers");
 //  Spec ref: Section 7.3
 //  Architecture ref: Age Verification external service
 //
-//  Modular design — swap Onfido/Jumio without touching routes.
+//  Modular design — swap providers without touching routes.
 //  CinCin stores ONLY pass/fail + verified DOB. No ID images.
+//
+//  Security model:
+//  - Webhooks are only a trigger. Results are fetched from the provider's
+//    API with our credentials; the webhook body is never trusted.
+//  - Results map to users via ageVerifyRef, stored when the check starts.
+//  - The mock provider and manual verification are dev-only and require
+//    AGE_VERIFY_PROVIDER=mock outside production.
 // ═══════════════════════════════════════════════════════════════
 
 // Legal drinking age by region (Section 7.3)
@@ -21,18 +30,16 @@ const DRINKING_AGE = {
   DEFAULT: 18,
 };
 
+const requiredAgeFor = (region) => DRINKING_AGE[(region || "").toUpperCase()] || DRINKING_AGE.DEFAULT;
+
 /**
  * Initiate an age verification check.
- * Creates a check with the chosen provider and returns a verification
- * session token/URL for the client SDK to use.
  *
- * Flow:
- * 1. Client calls this endpoint to start verification
- * 2. Response contains an SDK token the client passes to the Onfido/Jumio
- *    SDK embedded in the frontend
- * 3. User completes ID scanning in the provider's SDK
- * 4. Provider sends a webhook to our callback endpoint
- * 5. We update the user's verification status
+ * Flow (Onfido):
+ * 1. Client calls this endpoint; we create an applicant and return an SDK token
+ * 2. User completes document capture in the provider SDK
+ * 3. Client calls POST /age-verify/submit; we create the check
+ * 4. Provider sends a check.completed webhook; we fetch the result and update the user
  */
 async function initiateVerification(userId, { region = "AU" } = {}) {
   const user = await prisma.user.findUnique({
@@ -46,76 +53,118 @@ async function initiateVerification(userId, { region = "AU" } = {}) {
   }
 
   const provider = getProvider();
-  const requiredAge = DRINKING_AGE[region.toUpperCase()] || DRINKING_AGE.DEFAULT;
+  const requiredAge = requiredAgeFor(region);
 
   const session = await provider.createCheck({
     userId: user.id,
     email: user.email,
     displayName: user.displayName,
-    requiredAge,
-    region,
+  });
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { ageVerifyRef: session.ref, ageVerifyRegion: region.toUpperCase() },
   });
 
   return {
     status: "pending",
     provider: provider.name,
     sdkToken: session.sdkToken,
-    checkId: session.checkId,
+    checkId: session.ref,
     requiredAge,
     region,
   };
 }
 
 /**
+ * Called by the client once the user has finished the provider SDK flow.
+ * Starts the provider-side check for the user's stored reference.
+ */
+async function submitVerification(userId) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { ageVerified: true, ageVerifyRef: true },
+  });
+
+  if (!user) throw new AppError("User not found", 404);
+  if (user.ageVerified) return { status: "already_verified" };
+  if (!user.ageVerifyRef) throw new AppError("Start verification first", 400);
+
+  await getProvider().submitCheck(user.ageVerifyRef);
+  return { status: "pending" };
+}
+
+/**
  * Process the verification webhook callback from the provider.
- * Called by POST /api/auth/age-verify/webhook
+ * Called by POST /api/auth/age-verify/webhook with the raw request body.
  *
- * The provider sends the result once the user completes their check.
- * We extract pass/fail + DOB and update the user record.
  * We do NOT store any ID document images (Section 7.3).
  */
-async function processWebhook(payload, providerSignature) {
+async function processWebhook(rawBody, headers) {
   const provider = getProvider();
 
-  // Verify webhook signature to prevent spoofing
-  const isValid = provider.verifyWebhookSignature(payload, providerSignature);
-  if (!isValid) throw new AppError("Invalid webhook signature", 403);
+  // Verify webhook signature to prevent spoofing (defence in depth — the result is re-fetched below)
+  if (!provider.verifyWebhookSignature(rawBody, headers)) {
+    throw new AppError("Invalid webhook signature", 403);
+  }
 
-  const result = provider.parseWebhookResult(payload);
-
-  if (!result.userId || result.passed === undefined) {
+  let payload;
+  try {
+    payload = JSON.parse(rawBody.toString("utf8"));
+  } catch {
     throw new AppError("Invalid webhook payload", 400);
   }
 
-  // Update user record — only store pass/fail and DOB
-  if (result.passed) {
+  const result = await provider.fetchResult(payload);
+  if (!result) return { ignored: true }; // not a completion event
+
+  const user = await prisma.user.findUnique({
+    where: { ageVerifyRef: result.ref },
+    select: { id: true, ageVerifyRegion: true },
+  });
+  if (!user) {
+    console.warn(`[AgeVerify] Webhook for unknown reference ${result.ref} — ignored`);
+    return { ignored: true };
+  }
+
+  let { passed, reason } = result;
+  const requiredAge = requiredAgeFor(user.ageVerifyRegion);
+
+  if (passed) {
+    if (!result.dateOfBirth) {
+      passed = false;
+      reason = "Date of birth could not be confirmed";
+    } else if (calculateAge(result.dateOfBirth) < requiredAge) {
+      passed = false;
+      reason = `Must be ${requiredAge}+ to use CinCin in ${user.ageVerifyRegion || "your region"}.`;
+    }
+  }
+
+  if (passed) {
     await prisma.user.update({
-      where: { id: result.userId },
+      where: { id: user.id },
       data: {
         ageVerified: true,
         ageVerifiedAt: new Date(),
-        dateOfBirth: result.dateOfBirth || null,
+        dateOfBirth: result.dateOfBirth,
+        ageVerifyRef: null,
       },
     });
   }
 
-  return {
-    userId: result.userId,
-    passed: result.passed,
-    reason: result.reason || null,
-  };
+  return { userId: user.id, passed, reason: reason || null };
 }
 
 /**
  * Manual verification result handler (for development/testing).
- * In production, results come exclusively through webhooks.
+ * Only available with AGE_VERIFY_PROVIDER=mock outside production.
  */
 async function manualVerify(userId, { passed, dateOfBirth, region = "AU" } = {}) {
-  if (process.env.NODE_ENV === "production") {
-    throw new AppError("Manual verification not available in production", 403);
+  if (!isMockMode()) {
+    throw new AppError("Manual verification is only available with the mock provider in development", 403);
   }
 
-  const requiredAge = DRINKING_AGE[region.toUpperCase()] || DRINKING_AGE.DEFAULT;
+  const requiredAge = requiredAgeFor(region);
 
   // Validate age if DOB provided
   if (dateOfBirth) {
@@ -163,211 +212,169 @@ async function getVerificationStatus(userId) {
 
 // ═══════════════════════════════════════════════════════════════
 //  PROVIDER IMPLEMENTATIONS
-//  Modular pattern — each provider implements the same interface.
+//  Each provider implements: createCheck, submitCheck,
+//  verifyWebhookSignature(rawBody, headers), fetchResult(payload).
 //  Switch via AGE_VERIFY_PROVIDER env variable.
 // ═══════════════════════════════════════════════════════════════
 
-function getProvider() {
-  const providerName = process.env.AGE_VERIFY_PROVIDER || "onfido";
+function isMockMode() {
+  return config.ageVerifyProvider === "mock" && config.env !== "production";
+}
 
-  switch (providerName) {
+function getProvider() {
+  switch (config.ageVerifyProvider) {
+    case "mock":
+      if (config.env === "production") {
+        throw new AppError("Mock age verification is disabled in production", 503);
+      }
+      return mockProvider;
     case "jumio":
       return jumioProvider;
-    case "mock":
-      return mockProvider;
     case "onfido":
     default:
       return onfidoProvider;
   }
 }
 
-// ─── Onfido Provider ───
+/** Constant-time comparison that tolerates length mismatches (timingSafeEqual throws on them). */
+function safeEqual(a, b) {
+  const bufA = Buffer.from(a || "");
+  const bufB = Buffer.from(b || "");
+  return bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
+}
+
+// ─── Onfido Provider (API v3.6) ───
 
 const onfidoProvider = {
   name: "onfido",
 
-  async createCheck({ userId, email, displayName, requiredAge, region }) {
+  baseUrl() {
+    return process.env.AGE_VERIFY_API_BASE || "https://api.eu.onfido.com/v3.6";
+  },
+
+  async request(path, { method = "GET", body } = {}) {
     const apiKey = process.env.AGE_VERIFY_API_KEY;
     if (!apiKey) throw new AppError("Onfido API key not configured", 503);
 
-    // Step 1: Create an applicant
-    const applicantRes = await fetch("https://api.eu.onfido.com/v3.6/applicants", {
-      method: "POST",
+    const res = await fetch(`${this.baseUrl()}${path}`, {
+      method,
       headers: {
         "Content-Type": "application/json",
         Authorization: `Token token=${apiKey}`,
       },
-      body: JSON.stringify({
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new AppError(`Onfido ${method} ${path} failed: ${err}`, 502);
+    }
+    return res.json();
+  },
+
+  async createCheck({ userId, email, displayName }) {
+    const applicant = await this.request("/applicants", {
+      method: "POST",
+      body: {
         first_name: displayName.split(" ")[0] || "User",
         last_name: displayName.split(" ").slice(1).join(" ") || userId.slice(-6),
         email,
-      }),
-    });
-
-    if (!applicantRes.ok) {
-      const err = await applicantRes.text();
-      throw new AppError(`Onfido applicant creation failed: ${err}`, 502);
-    }
-
-    const applicant = await applicantRes.json();
-
-    // Step 2: Generate an SDK token for the frontend
-    const tokenRes = await fetch("https://api.eu.onfido.com/v3.6/sdk_token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Token token=${apiKey}`,
       },
-      body: JSON.stringify({
-        applicant_id: applicant.id,
-        referrer: process.env.CORS_ORIGIN || "*",
-      }),
     });
 
-    if (!tokenRes.ok) {
-      throw new AppError("Onfido SDK token generation failed", 502);
-    }
+    const tokenData = await this.request("/sdk_token", {
+      method: "POST",
+      body: { applicant_id: applicant.id, referrer: process.env.CORS_ORIGIN || "*" },
+    });
 
-    const tokenData = await tokenRes.json();
-
-    return {
-      sdkToken: tokenData.token,
-      checkId: applicant.id,
-      metadata: { applicantId: applicant.id, requiredAge, region, userId },
-    };
+    return { sdkToken: tokenData.token, ref: applicant.id };
   },
 
-  verifyWebhookSignature(payload, signature) {
+  async submitCheck(applicantId) {
+    await this.request("/checks", {
+      method: "POST",
+      body: { applicant_id: applicantId, report_names: ["document"] },
+    });
+  },
+
+  // Onfido signs the raw body with HMAC-SHA256 (hex) in the X-SHA2-Signature header
+  verifyWebhookSignature(rawBody, headers) {
     const webhookSecret = process.env.AGE_VERIFY_WEBHOOK_SECRET;
     if (!webhookSecret) return false;
 
-    const crypto = require("crypto");
-    const expected = crypto
-      .createHmac("sha256", webhookSecret)
-      .update(typeof payload === "string" ? payload : JSON.stringify(payload))
-      .digest("hex");
-
-    return crypto.timingSafeEqual(Buffer.from(signature || ""), Buffer.from(expected));
+    const expected = crypto.createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
+    return safeEqual(headers["x-sha2-signature"], expected);
   },
 
-  parseWebhookResult(payload) {
-    // Onfido webhook structure
-    const action = payload?.payload?.action;
-    const checkResult = payload?.payload?.object;
-
-    if (action !== "check.completed") {
-      return { userId: null, passed: undefined };
+  async fetchResult(payload) {
+    const event = payload?.payload;
+    if (event?.resource_type !== "check" || event?.action !== "check.completed" || !event?.object?.id) {
+      return null;
     }
 
-    // Extract from check metadata
-    const userId = checkResult?.tags?.find(t => t.startsWith("user:"))?.replace("user:", "");
-    const passed = checkResult?.result === "clear";
-    const dateOfBirth = checkResult?.applicant?.date_of_birth || null;
+    const checkId = encodeURIComponent(event.object.id);
+    const check = await this.request(`/checks/${checkId}`);
+    const { reports = [] } = await this.request(`/reports?check_id=${checkId}`);
+    const documentReport = reports.find((r) => r.name === "document");
+    const dob = documentReport?.properties?.date_of_birth;
 
     return {
-      userId,
-      passed,
-      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-      reason: checkResult?.result === "consider"
-        ? "Verification requires manual review"
-        : null,
+      ref: check.applicant_id,
+      passed: check.result === "clear",
+      dateOfBirth: dob ? new Date(dob) : null,
+      reason: check.result === "consider" ? "Verification requires manual review" : null,
     };
   },
 };
 
 // ─── Jumio Provider ───
+// Not usable yet: Jumio callbacks are not HMAC-signed, so results must be
+// fetched from Jumio's retrieval API before this provider can be enabled.
 
 const jumioProvider = {
   name: "jumio",
 
-  async createCheck({ userId, email, displayName, requiredAge, region }) {
-    const apiKey = process.env.AGE_VERIFY_API_KEY;
-    const apiSecret = process.env.AGE_VERIFY_API_SECRET;
-    if (!apiKey || !apiSecret) throw new AppError("Jumio credentials not configured", 503);
-
-    const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString("base64");
-
-    const response = await fetch("https://netverify.com/api/v4/initiate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Basic ${auth}`,
-        "User-Agent": "CinCin/1.0",
-      },
-      body: JSON.stringify({
-        customerInternalReference: userId,
-        userReference: userId,
-        callbackUrl: `${process.env.API_BASE_URL || "https://api.getcincin.com"}/api/auth/age-verify/webhook`,
-        workflowId: 100, // ID verification
-      }),
-    });
-
-    if (!response.ok) {
-      throw new AppError("Jumio initiation failed", 502);
-    }
-
-    const data = await response.json();
-
-    return {
-      sdkToken: data.transactionReference,
-      checkId: data.transactionReference,
-      redirectUrl: data.redirectUrl,
-      metadata: { requiredAge, region, userId },
-    };
+  async createCheck() {
+    throw new AppError("Jumio age verification is not implemented yet", 501);
   },
 
-  verifyWebhookSignature(payload, signature) {
-    // Jumio uses a different signature mechanism
-    const webhookSecret = process.env.AGE_VERIFY_WEBHOOK_SECRET;
-    if (!webhookSecret) return false;
-
-    const crypto = require("crypto");
-    const expected = crypto
-      .createHmac("sha256", webhookSecret)
-      .update(typeof payload === "string" ? payload : JSON.stringify(payload))
-      .digest("hex");
-
-    return crypto.timingSafeEqual(
-      Buffer.from(signature || ""),
-      Buffer.from(expected)
-    );
+  async submitCheck() {
+    throw new AppError("Jumio age verification is not implemented yet", 501);
   },
 
-  parseWebhookResult(payload) {
-    const userId = payload?.customerInternalReference;
-    const status = payload?.verificationStatus;
-    const passed = status === "APPROVED_VERIFIED";
-    const dob = payload?.document?.dob;
+  verifyWebhookSignature() {
+    console.error("[AgeVerify] Jumio webhook rejected — Jumio integration is not implemented");
+    return false;
+  },
 
-    return {
-      userId,
-      passed,
-      dateOfBirth: dob ? new Date(dob) : null,
-      reason: status === "DENIED_FRAUD" ? "Verification denied" : null,
-    };
+  async fetchResult() {
+    return null;
   },
 };
 
-// ─── Mock Provider (Development/Testing) ───
+// ─── Mock Provider (Development/Testing only — see getProvider) ───
 
 const mockProvider = {
   name: "mock",
 
-  async createCheck({ userId, requiredAge, region }) {
+  async createCheck({ userId }) {
     return {
       sdkToken: `mock_token_${userId}_${Date.now()}`,
-      checkId: `mock_check_${userId}`,
-      metadata: { requiredAge, region, userId },
+      ref: `mock_${userId}_${Date.now()}`,
     };
   },
 
+  async submitCheck() {},
+
   verifyWebhookSignature() {
-    return true; // always pass in mock
+    return true;
   },
 
-  parseWebhookResult(payload) {
+  // Dev payload: { ref, passed?, dateOfBirth }
+  async fetchResult(payload) {
+    if (!payload?.ref) return null;
     return {
-      userId: payload.userId,
+      ref: payload.ref,
       passed: payload.passed !== false,
       dateOfBirth: payload.dateOfBirth ? new Date(payload.dateOfBirth) : null,
       reason: null,
@@ -389,6 +396,7 @@ function calculateAge(dob) {
 
 module.exports = {
   initiateVerification,
+  submitVerification,
   processWebhook,
   manualVerify,
   getVerificationStatus,

@@ -4,7 +4,12 @@ const config = require("../config");
  * Central error handler. Catches all thrown/next(err) errors.
  */
 function errorHandler(err, req, res, _next) {
-  console.error(`[ERROR] ${req.method} ${req.path}:`, err);
+  // Expected client errors (bad input, auth failures) get one line; everything else the full error
+  if (err.statusCode && err.statusCode < 500) {
+    console.warn(`[WARN] ${req.method} ${req.path}: ${err.statusCode} ${err.message}`);
+  } else {
+    console.error(`[ERROR] ${req.method} ${req.path}:`, err);
+  }
 
   // Prisma known errors
   if (err.code === "P2002") {

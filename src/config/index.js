@@ -6,6 +6,11 @@
 
 require("dotenv").config();
 
+// Tokens signed with the dev fallback secret could be forged by anyone who has read this file
+if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET must be set in production");
+}
+
 module.exports = {
   env: process.env.NODE_ENV || "development",
   port: parseInt(process.env.PORT, 10) || 4000,
@@ -25,6 +30,18 @@ module.exports = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "1h",
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
 
+  // Per-IP request limits per 15 minutes (all /api routes, and /api/auth on top)
+  rateLimit: {
+    max: parseInt(process.env.RATE_LIMIT_MAX, 10) || 100,
+    authMax: parseInt(process.env.AUTH_RATE_LIMIT_MAX, 10) || 20,
+  },
+
+  // Social login — OAuth client IDs accepted as ID token audiences (comma-separated)
+  social: {
+    googleClientIds: (process.env.GOOGLE_CLIENT_IDS || "").split(",").map((s) => s.trim()).filter(Boolean),
+    appleClientIds: (process.env.APPLE_CLIENT_IDS || "").split(",").map((s) => s.trim()).filter(Boolean),
+  },
+
   // Database
   databaseUrl: process.env.DATABASE_URL,
 
@@ -35,14 +52,14 @@ module.exports = {
   anthropicApiKey: process.env.ANTHROPIC_API_KEY,
   openaiApiKey: process.env.OPENAI_API_KEY,
   googleVisionApiKey: process.env.GOOGLE_VISION_API_KEY,
-  visionProvider: process.env.VISION_PROVIDER || "anthropic",
+  visionProvider: process.env.AI_VISION_PROVIDER || "anthropic",
+  llmProvider: process.env.AI_LLM_PROVIDER || "anthropic",
 
-  // Age Verification
-  ageVerifyProvider: process.env.AGE_VERIFY_PROVIDER || "mock",
-  onfidoApiKey: process.env.ONFIDO_API_KEY,
-  onfidoWebhookSecret: process.env.ONFIDO_WEBHOOK_SECRET,
-  jumioApiKey: process.env.JUMIO_API_KEY,
-  jumioApiSecret: process.env.JUMIO_API_SECRET,
+  // Age Verification (read directly by services/ageVerifyService.js)
+  ageVerifyProvider: process.env.AGE_VERIFY_PROVIDER || "onfido",
+  ageVerifyApiKey: process.env.AGE_VERIFY_API_KEY,
+  ageVerifyApiSecret: process.env.AGE_VERIFY_API_SECRET,
+  ageVerifyWebhookSecret: process.env.AGE_VERIFY_WEBHOOK_SECRET,
 
   // Share URLs
   shareBaseUrl: process.env.SHARE_BASE_URL || "http://localhost:3000",
@@ -50,7 +67,10 @@ module.exports = {
   // Free tier limits (Section 8.1)
   freeTier: {
     maxScansPerMonth: 5,
+    monthlyScans: 5, // read by scanService / helpers
     maxCellarClubs: 1,
+    roundTimerSecs: 60, // free users get the default game config
+    maxRounds: 20,
   },
 
   // Scan settings
@@ -64,6 +84,8 @@ module.exports = {
   // Game settings
   game: {
     lobbyTimeoutMs: 10 * 60 * 1000, // 10 minutes
+    lobbyTimeoutMinutes: 10,
+    gameCodeLength: 6, // join validator requires exactly 6 chars
     maxGuestPlayers: 20,
     offlineSyncMaxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     defaultTimerSecs: 60,

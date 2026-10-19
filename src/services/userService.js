@@ -173,9 +173,9 @@ async function exportDataCSV(userId) {
           guesses: {
             select: {
               guessText: true,
-              points: true,
+              pointsAwarded: true,
               isSpecific: true,
-              matchType: true,
+              matchedVia: true,
               createdAt: true,
             },
           },
@@ -237,9 +237,9 @@ async function exportDataCSV(userId) {
         [
           gp.game.id,
           `"${escapeCSV(guess.guessText)}"`,
-          guess.points,
+          guess.pointsAwarded,
           guess.isSpecific,
-          guess.matchType || "",
+          guess.matchedVia || "",
           guess.createdAt.toISOString(),
         ].join(",")
       );
@@ -258,7 +258,7 @@ async function exportDataCSV(userId) {
         `"${escapeCSV(scan.bottle?.name || "Unmatched")}"`,
         scan.bottle?.category || "",
         scan.confidence || "",
-        scan.method,
+        scan.inputMethod,
         scan.createdAt.toISOString(),
       ].join(",")
     ),

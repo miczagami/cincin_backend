@@ -162,12 +162,14 @@ async function listUserClubs(userId) {
   });
 
   return memberships.map((m) => ({
+    id: m.club.id,
     clubId: m.club.id,
     name: m.club.name,
     role: m.role,
     adminName: m.club.admin.displayName,
     memberCount: m.club.members.length,
     hasActiveSeason: m.club.seasons.length > 0,
+    currentSeason: m.club.seasons[0] || null,
     joinedAt: m.joinedAt,
     archivedAt: m.club.archivedAt,
   }));
@@ -775,7 +777,7 @@ async function calculateAwards(clubId, seasonId, leaderboard) {
       by: ["gamePlayerId"],
       where: {
         isSpecific: true,
-        points: { gt: 0 },
+        pointsAwarded: { gt: 0 },
         round: {
           game: {
             cellarClubId: clubId,

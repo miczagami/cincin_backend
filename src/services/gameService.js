@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const prisma = require("../config/database");
 const config = require("../config");
 const palateProfileService = require("./palateProfileService");
+const aiClient = require("./aiClient");
 const {
   generateCode, calculatePoints, getNoteCountRange, AppError,
 } = require("../utils/helpers");
@@ -701,17 +702,9 @@ async function evaluateGuessWithAI(guessText, availableNotes) {
     const provider = process.env.AI_LLM_PROVIDER || "anthropic";
 
     if (provider === "anthropic") {
-      const Anthropic = require("@anthropic-ai/sdk");
-      const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
-      const response = await client.messages.create({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 300,
+      const result = await aiClient.createMessage("guess", {
         system: `You are a flavour evaluation engine for a tasting game. Your job is to determine if a player's guess matches any of the available tasting notes. Consider synonyms, alternate spellings, regional terminology, and close flavour descriptors. Respond ONLY with valid JSON.`,
-        messages: [
-          {
-            role: "user",
-            content: `Player guessed: "${guessText}"
+        content: `Player guessed: "${guessText}"
 
 Available tasting notes:
 ${JSON.stringify(noteList, null, 2)}
@@ -730,20 +723,17 @@ Respond with JSON only:
   "confidence": 0.0-1.0,
   "reasoning": "brief explanation"
 }`,
-          },
-        ],
       });
 
-      const text = response.content[0].text.trim();
-      const parsed = JSON.parse(text.replace(/```json\s*|```/g, "").trim());
+      const parsed = JSON.parse(result.text.replace(/```json\s*|```/g, "").trim());
 
-      if (parsed.matched && parsed.matchedNoteId && parsed.confidence >= 0.7) {
+      if (parsed.matched && parsed.matchedNoteId && parsed.confidence >= config.aiGuessEval.minConfidence) {
         const matchedNote = availableNotes.find(n => n.id === parsed.matchedNoteId);
         if (matchedNote) {
           return {
             matchedNote,
             isSpecific: parsed.isSpecific,
-            reasoning: { provider: "anthropic", ...parsed },
+            reasoning: { provider: "anthropic", model: result.model, ...parsed },
           };
         }
       }

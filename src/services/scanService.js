@@ -205,20 +205,21 @@ async function sourceTastingNotes(bottleId) {
   const criticCount = existingNotes.filter(n => n.sourceTier === "CRITIC").length;
   const aiCount = existingNotes.filter(n => n.sourceTier === "AI_SYNTHESISED").length;
 
-  // If we have fewer than 3 notes total, try to synthesise more
-  if (existingNotes.length < 3) {
+  // If we have fewer than 3 notes total, try to synthesise more. At most once per
+  // bottle: players trigger this route, and each AI call is paid for.
+  if (existingNotes.length < 3 && aiCount === 0) {
     const synthesised = await synthesiseNotes(bottle);
     if (synthesised.length > 0) {
       await upsertNotes(bottleId, synthesised, "AI_SYNTHESISED");
     }
   }
 
-  // Return all notes after sourcing
   const allNotes = await prisma.tastingNote.findMany({
     where: { bottleId },
     orderBy: { sourceTier: "asc" },
   });
 
+  // Counts only: the notes are the game's answers, and players call this route
   return {
     bottleId,
     totalNotes: allNotes.length,
@@ -227,7 +228,6 @@ async function sourceTastingNotes(bottleId) {
       critic: allNotes.filter(n => n.sourceTier === "CRITIC").length,
       aiSynthesised: allNotes.filter(n => n.sourceTier === "AI_SYNTHESISED").length,
     },
-    notes: allNotes,
   };
 }
 

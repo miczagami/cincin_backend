@@ -36,12 +36,12 @@ const THINKING_OFF = {
   "claude-haiku-5-5": { type: "disabled" },
 };
 
-function buildParams(model, { system, content, maxTokens, effort, thinking }) {
+function buildParams(model, { system, content, maxTokens, effort, thinking, format }) {
   const params = {
     model,
     max_tokens: maxTokens,
     messages: [{ role: "user", content }],
-    output_config: { effort },
+    output_config: format ? { effort, format } : { effort },
   };
   if (system) params.system = system;
   if (thinking === "off" && THINKING_OFF[model]) params.thinking = THINKING_OFF[model];
@@ -86,14 +86,16 @@ async function callModel(model, request) {
  *
  * `content` is a string or an array of content blocks (image + text).
  * `thinking: "off"` turns thinking off where the model allows it.
+ * `format` (a json_schema output format) holds the reply to that schema.
  */
-async function createMessage(role, { system, content, maxTokens, effort, thinking }) {
+async function createMessage(role, { system, content, maxTokens, effort, thinking, format }) {
   const roleConfig = config.ai.roles[role];
   if (!roleConfig) throw new Error(`Unknown AI role: ${role}`);
 
   const request = {
     system,
     content,
+    format,
     maxTokens: maxTokens ?? roleConfig.maxTokens,
     effort: effort ?? roleConfig.effort,
     thinking: thinking ?? roleConfig.thinking,

@@ -3,8 +3,20 @@
  * The notes are the game's answers, so players only ever get counts back, and the
  * paid AI note-writing runs at most once per bottle.
  */
+// The bottle's AI-attempt marker, with Prisma's conditional-update semantics: a
+// claim succeeds only when no attempt is recorded, or the last one is older than `lt`.
+let mockAttemptAt = null;
 const mockDb = {
-  bottle: { findUnique: jest.fn() },
+  bottle: {
+    findUnique: jest.fn(),
+    updateMany: jest.fn(async ({ where, data }) => {
+      const olderThan = where.OR?.find((c) => c.notesSynthesisedAt?.lt)?.notesSynthesisedAt.lt;
+      const claimable = mockAttemptAt === null || (olderThan && mockAttemptAt < olderThan);
+      if (!claimable) return { count: 0 };
+      mockAttemptAt = data.notesSynthesisedAt;
+      return { count: 1 };
+    }),
+  },
   tastingNote: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
 };
 jest.mock("../src/config/database", () => mockDb);
@@ -22,6 +34,7 @@ const bottle = (tastingNotes) => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAttemptAt = null;
   process.env.ANTHROPIC_API_KEY = "test-key";
   mockDb.tastingNote.findUnique.mockResolvedValue(null);
   mockDb.tastingNote.create.mockResolvedValue({});
@@ -62,4 +75,36 @@ test("a bottle that already has AI-written notes is not sent to the AI again, ev
 
   expect(mockCreateMessage).not.toHaveBeenCalled();
   expect(result.totalNotes).toBe(2);
+});
+
+test("after a failed AI attempt, the next request doesn't pay for another one", async () => {
+  mockDb.bottle.findUnique.mockResolvedValue(bottle([]));
+  mockDb.tastingNote.findMany.mockResolvedValue([]);
+  mockCreateMessage.mockRejectedValue(new Error("timeout"));
+
+  await scanService.sourceTastingNotes("b1");
+  await scanService.sourceTastingNotes("b1");
+
+  expect(mockCreateMessage).toHaveBeenCalledTimes(1);
+});
+
+test("parallel requests for the same bottle make one AI call", async () => {
+  mockDb.bottle.findUnique.mockResolvedValue(bottle([]));
+  mockDb.tastingNote.findMany.mockResolvedValue([]);
+  mockCreateMessage.mockResolvedValue({ text: "[]" });
+
+  await Promise.all([1, 2, 3].map(() => scanService.sourceTastingNotes("b1")));
+
+  expect(mockCreateMessage).toHaveBeenCalledTimes(1);
+});
+
+test("a bottle whose last AI attempt was over a day ago is tried again", async () => {
+  mockAttemptAt = new Date(Date.now() - 25 * 60 * 60 * 1000);
+  mockDb.bottle.findUnique.mockResolvedValue(bottle([]));
+  mockDb.tastingNote.findMany.mockResolvedValue([]);
+  mockCreateMessage.mockResolvedValue({ text: "[]" });
+
+  await scanService.sourceTastingNotes("b1");
+
+  expect(mockCreateMessage).toHaveBeenCalledTimes(1);
 });

@@ -45,7 +45,20 @@ test.each([
   expect(result.matchedNote).toBeNull();
 });
 
-test.each(["freshly cut grass", "crème brûlée", "black-currant"])(
+test.each([
+  "freshly cut grass",
+  "crème brûlée",
+  "crème brûlée", // the same, typed in decomposed Unicode
+  "black-currant",
+  "cherry, plum",
+  "peach/apricot",
+  "lemon & lime",
+  "chinese 5-spice",
+  "earthy.",
+  "st. germain",
+  "black  pepper",
+  "a hint of wet stone",
+])(
   "real multi-word or accented descriptors still reach the AI: %s",
   async (guess) => {
     aiSays({ matched: false, matchedNoteId: null, isSpecific: false, confidence: 0.2, reasoning: "no" });

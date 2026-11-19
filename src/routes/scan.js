@@ -77,8 +77,9 @@ router.post("/confirm/:bottleId", async (req, res, next) => {
 
 // ─── Tasting Note Sourcing (Section 2.3) ───
 
-// POST /api/scan/source-notes/:bottleId — trigger note sourcing for a bottle
-// Admin/internal use — sources notes from producer, critic, and AI tiers
+// POST /api/scan/source-notes/:bottleId — make sure a bottle has tasting notes
+// Called by the app when a player confirms a scanned bottle. Returns counts only (the
+// notes are the game's answers); AI note-writing is limited to one attempt a day per bottle.
 router.post("/source-notes/:bottleId", async (req, res, next) => {
   try {
     const result = await scanService.sourceTastingNotes(req.params.bottleId);

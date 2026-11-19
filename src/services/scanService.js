@@ -191,6 +191,28 @@ async function getTastingNotes(bottleId) {
  * - Calling the LLM for AI-synthesised notes if coverage is thin
  * - Deduplication with highest-tier retention
  */
+const SYNTHESIS_RETRY_AFTER_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Record an AI note-writing attempt on the bottle, unless one was made in the last day.
+ * A single conditional update, so of several parallel requests only one wins.
+ * @returns {Promise<boolean>} true when this request may call the AI
+ */
+async function claimSynthesisAttempt(bottleId) {
+  const now = new Date();
+  const { count } = await prisma.bottle.updateMany({
+    where: {
+      id: bottleId,
+      OR: [
+        { notesSynthesisedAt: null },
+        { notesSynthesisedAt: { lt: new Date(now.getTime() - SYNTHESIS_RETRY_AFTER_MS) } },
+      ],
+    },
+    data: { notesSynthesisedAt: now },
+  });
+  return count === 1;
+}
+
 async function sourceTastingNotes(bottleId) {
   const bottle = await prisma.bottle.findUnique({
     where: { id: bottleId },
@@ -205,9 +227,10 @@ async function sourceTastingNotes(bottleId) {
   const criticCount = existingNotes.filter(n => n.sourceTier === "CRITIC").length;
   const aiCount = existingNotes.filter(n => n.sourceTier === "AI_SYNTHESISED").length;
 
-  // If we have fewer than 3 notes total, try to synthesise more. At most once per
-  // bottle: players trigger this route, and each AI call is paid for.
-  if (existingNotes.length < 3 && aiCount === 0) {
+  // If we have fewer than 3 notes total, try to synthesise more. Players trigger this
+  // route and each AI call is paid for, so a bottle gets one attempt per day at most,
+  // claimed atomically before the call (failed, empty and parallel attempts included).
+  if (existingNotes.length < 3 && aiCount === 0 && await claimSynthesisAttempt(bottleId)) {
     const synthesised = await synthesiseNotes(bottle);
     if (synthesised.length > 0) {
       await upsertNotes(bottleId, synthesised, "AI_SYNTHESISED");

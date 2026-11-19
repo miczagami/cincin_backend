@@ -682,15 +682,18 @@ async function matchViaTaxonomy(normalised, availableNotes) {
   return null;
 }
 
-/**
- * AI evaluation for free-text guesses that don't match taxonomy.
- * Uses LLM to determine synonyms, alternate spellings, regional terms.
- */
-// A tasting descriptor: up to 4 words of letters, with spaces, hyphens or apostrophes
-// ("capsicum", "freshly cut grass", "crème brûlée"). Anything else - punctuation,
-// quotes, long sentences - is not a flavour and could be an instruction to the AI.
-const TASTING_DESCRIPTOR = /^\p{L}+(?:[ '’-]\p{L}+){0,3}$/u;
-const MAX_AI_GUESS_LENGTH = 40;
+// A tasting descriptor: up to 6 words of letters or digits, joined by spaces, hyphens,
+// apostrophes or a list separator (, / & .), with an optional final full stop -
+// "capsicum", "a hint of wet stone", "cherry, plum", "chinese 5-spice", "st. germain".
+// Anything else (colons, quotes, brackets, long sentences) is not a flavour and could
+// be an instruction to the AI.
+const TASTING_DESCRIPTOR = /^[\p{L}\p{N}]+(?:(?:[ '’-]|\s?[,/&.]\s?)[\p{L}\p{N}]+){0,5}\.?$/u;
+const MAX_AI_GUESS_LENGTH = 48;
+
+/** NFC (so "crème" typed as e + combining accent still matches) and single spaces. */
+function normaliseForAI(guessText) {
+  return guessText.normalize("NFC").replace(/\s+/g, " ").trim();
+}
 
 function isTastingDescriptor(guessText) {
   return guessText.length <= MAX_AI_GUESS_LENGTH && TASTING_DESCRIPTOR.test(guessText);
@@ -715,12 +718,17 @@ const GUESS_VERDICT_FORMAT = {
   },
 };
 
-async function evaluateGuessWithAI(guessText, availableNotes) {
+/**
+ * AI evaluation for free-text guesses that don't match taxonomy.
+ * Uses LLM to determine synonyms, alternate spellings, regional terms.
+ */
+async function evaluateGuessWithAI(rawGuessText, availableNotes) {
   // Only attempt AI evaluation if we have an API key
   const apiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
   // Guesses are player input: only short, flavour-shaped text reaches the model
+  const guessText = normaliseForAI(rawGuessText);
   if (!isTastingDescriptor(guessText)) return null;
 
   const noteList = availableNotes.map(n => ({

@@ -149,6 +149,7 @@ model Bottle {
   description  String?       @db.Text
   abv          Float?
   volume       String?       // e.g. "750ml"
+  notesSynthesisedAt DateTime? // last AI note-writing attempt; limits paid calls per bottle
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 

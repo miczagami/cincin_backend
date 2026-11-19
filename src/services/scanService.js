@@ -1,6 +1,7 @@
 const prisma = require("../config/database");
 const config = require("../config");
 const { checkScanLimit, getConfidenceLevel, getNoteCountRange, AppError } = require("../utils/helpers");
+const aiClient = require("./aiClient");
 
 // ═══════════════════════════════════════════════════════════════
 //  AI PIPELINE v1 — Label Recognition & Tasting Note Sourcing
@@ -533,29 +534,17 @@ If you cannot identify the bottle, set confidence to 0.`,
  * Anthropic Claude Vision integration.
  */
 async function callAnthropicVision(imageBase64, mimeType) {
-  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.AI_SERVICE_API_KEY;
-  if (!apiKey) throw new AppError("Anthropic API key not configured", 503);
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 400,
-      messages: [{
-        role: "user",
-        content: [
-          {
-            type: "image",
-            source: { type: "base64", media_type: mimeType, data: imageBase64 },
-          },
-          {
-            type: "text",
-            text: `Analyse this bottle label image. Return ONLY a JSON object with:
+  let result;
+  try {
+    result = await aiClient.createMessage("vision", {
+      content: [
+        {
+          type: "image",
+          source: { type: "base64", media_type: mimeType, data: imageBase64 },
+        },
+        {
+          type: "text",
+          text: `Analyse this bottle label image. Return ONLY a JSON object with:
 {
   "brand": "producer/brand name",
   "product": "full product name",
@@ -567,23 +556,19 @@ async function callAnthropicVision(imageBase64, mimeType) {
   "confidence": 0.0 to 1.0
 }
 If you cannot identify the bottle, set confidence to 0. Do not include markdown.`,
-          },
-        ],
-      }],
-    }),
-  });
-
-  if (!response.ok) {
-    throw new AppError(`Anthropic API error: ${response.status}`, 502);
+        },
+      ],
+    });
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(`Anthropic API error: ${err.status || err.message}`, 502);
   }
-
-  const data = await response.json();
-  const content = data.content?.[0]?.text || "";
 
   return {
     provider: "anthropic",
-    rawResponse: content,
-    ...parseVisionJSON(content),
+    model: result.model,
+    rawResponse: result.text,
+    ...parseVisionJSON(result.text),
   };
 }
 
@@ -604,28 +589,16 @@ async function callLLM(prompt) {
 }
 
 async function callAnthropicLLM(prompt) {
-  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.AI_SERVICE_API_KEY;
-  if (!apiKey) throw new AppError("Anthropic API key not configured", 503);
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 600,
+  try {
+    const result = await aiClient.createMessage("synthesis", {
       system: prompt.system,
-      messages: [{ role: "user", content: prompt.user }],
-    }),
-  });
-
-  if (!response.ok) throw new AppError(`Anthropic LLM error: ${response.status}`, 502);
-
-  const data = await response.json();
-  return data.content?.[0]?.text || "";
+      content: prompt.user,
+    });
+    return result.text;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new AppError(`Anthropic LLM error: ${err.status || err.message}`, 502);
+  }
 }
 
 async function callOpenAILLM(prompt) {

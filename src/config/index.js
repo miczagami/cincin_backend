@@ -60,6 +60,43 @@ module.exports = {
   visionProvider: process.env.AI_VISION_PROVIDER || "anthropic",
   llmProvider: process.env.AI_LLM_PROVIDER || "anthropic",
 
+  // Claude models per role (read by services/aiClient.js). Model IDs are config so a
+  // retired model is an env change. `thinking: "off"` uses each model's own off switch.
+  ai: {
+    // "us" keeps inference in the US (1.1x price); unset = global routing
+    inferenceGeo: process.env.AI_INFERENCE_GEO || null,
+    roles: {
+      vision: {
+        model: process.env.AI_VISION_MODEL || "claude-sonnet-5-5",
+        fallbackModel: process.env.AI_VISION_FALLBACK_MODEL || "claude-haiku-5-5",
+        effort: "low",
+        thinking: "off",
+        maxTokens: 4096,
+        timeoutMs: parseInt(process.env.AI_VISION_TIMEOUT_MS, 10) || 15000,
+        maxRetries: 1,
+      },
+      guess: {
+        model: process.env.AI_LLM_MODEL || "claude-haiku-5-5",
+        fallbackModel: process.env.AI_LLM_FALLBACK_MODEL || "claude-sonnet-5-5",
+        effort: "low",
+        thinking: "off",
+        maxTokens: 4096,
+        // Players are waiting mid-round; the non-AI matcher is the last resort
+        timeoutMs: parseInt(process.env.AI_GUESS_TIMEOUT_MS, 10) || 4000,
+        maxRetries: 0,
+      },
+      synthesis: {
+        model: process.env.AI_SYNTHESIS_MODEL || "claude-sonnet-5-5",
+        fallbackModel: process.env.AI_SYNTHESIS_FALLBACK_MODEL || "claude-haiku-5-5",
+        effort: "medium",
+        thinking: "adaptive",
+        maxTokens: 8192,
+        timeoutMs: parseInt(process.env.AI_SYNTHESIS_TIMEOUT_MS, 10) || 60000,
+        maxRetries: 2,
+      },
+    },
+  },
+
   // Age Verification (read directly by services/ageVerifyService.js)
   ageVerifyProvider: process.env.AGE_VERIFY_PROVIDER || "onfido",
   ageVerifyApiKey: process.env.AGE_VERIFY_API_KEY,
@@ -97,10 +134,9 @@ module.exports = {
     defaultMaxRounds: 20,
   },
 
-  // Phase 2: AI Guess Evaluation
+  // Phase 2: AI Guess Evaluation (model and timeout: ai.roles.guess)
   aiGuessEval: {
     minConfidence: 0.7,
-    timeoutMs: 5000,
   },
 
   // Phase 3: WebSocket configuration

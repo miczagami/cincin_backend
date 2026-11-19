@@ -147,3 +147,12 @@ test("AI_INFERENCE_GEO is sent as inference_geo", async () => {
   await aiClient.createMessage("guess", { content: "g" });
   expect(mockCreate.mock.calls[0][0].inference_geo).toBe("us");
 });
+
+test("a JSON schema is sent as output_config.format alongside the effort", async () => {
+  mockCreate.mockResolvedValue(reply("claude-haiku-5-5", [{ type: "text", text: "{}" }]));
+  const format = { type: "json_schema", schema: { type: "object", properties: {}, additionalProperties: false } };
+
+  await aiClient.createMessage("guess", { content: "g", format });
+
+  expect(mockCreate.mock.calls[0][0].output_config).toEqual({ effort: "low", format });
+});

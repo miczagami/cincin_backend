@@ -52,6 +52,13 @@ describe("email verification", () => {
     }));
   });
 
+  test("the verification link doesn't carry the address, even encoded", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", email: "a@test.com", emailVerified: false });
+    await authService.resendVerificationEmail("u1");
+
+    expect(JSON.stringify(jwt.decode(linkToken()))).not.toContain("a@test.com");
+  });
+
   test("a link for a previous email address is rejected", async () => {
     prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", email: "old@test.com", emailVerified: false });
     await authService.resendVerificationEmail("u1");

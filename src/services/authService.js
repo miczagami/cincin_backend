@@ -58,7 +58,7 @@ const EMAIL_VERIFY_EXPIRY = "24h";
  * current email, so changing email invalidates outstanding links.
  */
 async function sendVerificationEmail({ id, email }) {
-  const token = jwt.sign({ userId: id, email, type: "email_verify" }, config.jwt.secret, {
+  const token = jwt.sign({ userId: id, emailMac: emailMac(email), type: "email_verify" }, config.jwt.secret, {
     expiresIn: EMAIL_VERIFY_EXPIRY,
   });
 
@@ -107,7 +107,7 @@ async function verifyEmail(token) {
     where: { id: payload.userId },
     select: { id: true, email: true, emailVerified: true, deletedAt: true },
   });
-  if (!user || user.deletedAt || user.email !== payload.email) {
+  if (!user || user.deletedAt || payload.emailMac !== emailMac(user.email)) {
     throw new AppError("This verification link is invalid or has expired.", 400);
   }
 
@@ -364,6 +364,14 @@ async function logout(sessionId) {
 
 function hashToken(token) {
   return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+/**
+ * Binds a verification link to an email address without putting the address
+ * in the token, which is readable by anyone who sees the link (or a log of it).
+ */
+function emailMac(email) {
+  return crypto.createHmac("sha256", config.jwt.secret).update(`email_verify:${email}`).digest("base64url");
 }
 
 /**

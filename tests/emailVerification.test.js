@@ -68,6 +68,15 @@ describe("email verification", () => {
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
+  test("a link issued before links stopped carrying the address is rejected", async () => {
+    // Accepted break (#6): pre-deploy links held the address itself; players resend from Settings
+    const legacy = jwt.sign({ userId: "u1", email: "a@test.com", type: "email_verify" }, config.jwt.secret, { expiresIn: "24h" });
+    prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", email: "a@test.com", emailVerified: false, deletedAt: null });
+
+    await expect(authService.verifyEmail(legacy)).rejects.toMatchObject({ statusCode: 400 });
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
   test("an access token can't be used as a verification link", async () => {
     const access = jwt.sign({ userId: "u1", type: "access" }, config.jwt.secret);
     await expect(authService.verifyEmail(access)).rejects.toMatchObject({ statusCode: 400 });

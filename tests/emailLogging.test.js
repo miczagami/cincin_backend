@@ -9,6 +9,7 @@ jest.mock("../src/config/database", () => ({
 }));
 
 const prisma = require("../src/config/database");
+const { captureConsole } = require("./captureConsole");
 const config = require("../src/config");
 const notificationService = require("../src/services/notificationService");
 
@@ -23,15 +24,12 @@ const ACCOUNT_EMAIL = {
   actionLabel: "Reset password",
 };
 
-let logged;
+let captured;
 const originalEnv = config.env;
 const originalKey = config.email.sendgridApiKey;
 
 beforeEach(() => {
-  logged = [];
-  for (const level of ["log", "info", "warn", "error"]) {
-    jest.spyOn(console, level).mockImplementation((...args) => logged.push(args.join(" ")));
-  }
+  captured = captureConsole();
 });
 
 afterEach(() => {
@@ -40,7 +38,7 @@ afterEach(() => {
   config.email.sendgridApiKey = originalKey;
 });
 
-const output = () => logged.join("\n");
+const output = () => captured.output();
 
 describe("account emails", () => {
   test("a sent account email logs the user ID, not the address", async () => {

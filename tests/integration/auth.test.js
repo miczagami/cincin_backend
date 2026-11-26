@@ -3,6 +3,7 @@
  */
 const { startServer, client, createUser, prisma, PASSWORD } = require("./helpers");
 const notificationService = require("../../src/services/notificationService");
+const { captureConsole } = require("../captureConsole");
 
 let server;
 let api;
@@ -18,13 +19,12 @@ beforeEach(() => emailSpy.mockClear());
 
 /** Run `fn` with every console level captured; returns its result and everything logged. */
 async function withCapturedLogs(fn) {
-  const spies = ["log", "info", "warn", "error"].map((level) => jest.spyOn(console, level).mockImplementation(() => {}));
+  const captured = captureConsole();
   try {
     const result = await fn();
-    const output = spies.flatMap((spy) => spy.mock.calls.map((args) => args.join(" "))).join("\n");
-    return { result, output };
+    return { result, output: captured.output() };
   } finally {
-    spies.forEach((spy) => spy.mockRestore());
+    captured.restore();
   }
 }
 

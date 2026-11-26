@@ -101,9 +101,9 @@ DNS stays on Cloudflare. Nothing changes for users until the DNS records are swi
 
 ## 4. Marketing site (`cincin_www`)
 
-`cincin_www` serves only its `public/` folder, and Sevalla is its only host from here on. Before merging the change that moved the site into `public/` (or any later change to that layout):
-- **Vercel:** disconnect the `cincin_www` project from Git (Project → Settings → Git → Disconnect), so a merge can't redeploy it with an old output setting. Its last deployment keeps serving the domains until the DNS switch in step 6, and the project is deleted in step 7.
-- **Sevalla**, if the static site already exists: set the publish directory below first, because the merge auto-deploys.
+`cincin_www` serves only its `public/` folder, and Sevalla becomes its only host. Before merging the change that moved the site into `public/` (or any later change to that layout):
+- **Vercel:** disconnect the `cincin_www` project from Git (Project → Settings → Git → Disconnect), so a merge can't redeploy it with an old output setting. Its last deployment keeps serving the domains until the DNS switch in step 6, and the project is deleted in step 7. Until then the live site is frozen on that deployment: merged changes don't go live, and files it published from the old root layout stay reachable.
+- **Sevalla**, if the static site already exists: set the publish directory below and clear **Error file** first, because the merge auto-deploys.
 
 Sevalla → **Static sites** → **Add static site**:
 - Repo `miczagami/cincin_www`, branch `main`.

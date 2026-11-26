@@ -101,11 +101,16 @@ DNS stays on Cloudflare. Nothing changes for users until the DNS records are swi
 
 ## 4. Marketing site (`cincin_www`)
 
+`cincin_www` serves only its `public/` folder. Before merging a change that moves files in or out of it, check that every host deploying the repo publishes `public`, because the merge redeploys straight away:
+- **Vercel** (serving the live site until step 6): Project → Settings → Build & Output. Output Directory must be `public` or left on the default (which picks `public` when it exists), and Production Overrides must not set another one.
+- **Sevalla**, if the static site already exists: set the publish directory below first.
+
 Sevalla → **Static sites** → **Add static site**:
 - Repo `miczagami/cincin_www`, branch `main`.
 - Auto-deploy on.
 - **No build command.**
-- Publish directory: `public`. Don't leave it blank: blank publishes the repo root, which would make `README.md`, `CLAUDE.md` and `docs/` public. If the static site already exists, set this under its build settings and redeploy.
+- Publish directory: `public`. Don't leave it blank: blank publishes the repo root, files that must stay private included (see the `cincin_www` README).
+- Leave **Error file** empty, so unknown paths return a real 404. (Only the app needs `index.html` there.)
 - `public/_redirects` sends `www.playcincin.com/<path>` to `playcincin.com/<path>` with a 301. It works once both domains are added to this static site (step 6c–d).
 
 ## 5. Copy the data from Railway (cutover window)

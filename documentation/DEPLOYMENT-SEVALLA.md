@@ -105,7 +105,8 @@ Sevalla → **Static sites** → **Add static site**:
 - Repo `miczagami/cincin_www`, branch `main`.
 - Auto-deploy on.
 - **No build command.**
-- Publish directory: the repo root (leave blank, or `.`).
+- Publish directory: `public`. Don't leave it blank: blank publishes the repo root, which would make `README.md`, `CLAUDE.md` and `docs/` public.
+- `public/_redirects` sends `www.playcincin.com/<path>` to `playcincin.com/<path>` with a 301. It works once both domains are added to this static site (step 6c–d).
 
 ## 5. Copy the data from Railway (cutover window)
 
@@ -148,7 +149,10 @@ Checks after each switch:
   - Start a multi-device game. In DevTools → Network, the `socket.io` request should upgrade (status **101**).
   - Send a Stripe test webhook (Stripe → Developers → Webhooks → your endpoint → Send test event) and confirm it returns 2xx.
 - **app:** load, sign in, reload on a deep link.
-- **apex/www:** both load the marketing page, and the "Get started" links reach the app.
+- **apex/www:**
+  - The apex loads the marketing page, and the "Get started" links reach the app.
+  - `curl -sI https://www.playcincin.com/robots.txt` returns `301` with `location: https://playcincin.com/robots.txt`.
+  - `curl -sI https://playcincin.com/README.md` returns `404`.
 
 Webhook URLs (Stripe, Onfido), Google/Apple sign-in origins and email links don't change, because the domains stay the same.
 

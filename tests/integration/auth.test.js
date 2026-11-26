@@ -16,6 +16,18 @@ beforeAll(async () => {
 afterAll(() => server.close());
 beforeEach(() => emailSpy.mockClear());
 
+/** Run `fn` with every console level captured; returns its result and everything logged. */
+async function withCapturedLogs(fn) {
+  const spies = ["log", "info", "warn", "error"].map((level) => jest.spyOn(console, level).mockImplementation(() => {}));
+  try {
+    const result = await fn();
+    const output = spies.flatMap((spy) => spy.mock.calls.map((args) => args.join(" "))).join("\n");
+    return { result, output };
+  } finally {
+    spies.forEach((spy) => spy.mockRestore());
+  }
+}
+
 describe("signup and email verification", () => {
   test("signup emails a link that verifies the account", async () => {
     const email = `signup${Date.now()}@test.com`;
@@ -33,16 +45,11 @@ describe("signup and email verification", () => {
 
   test("the verification email is logged under the new user's ID, not their address", async () => {
     const email = `logged${Date.now()}@test.com`;
-    const log = jest.spyOn(console, "log").mockImplementation(() => {});
-    try {
-      const signup = await api.post("/auth/signup", { email, password: PASSWORD, displayName: "Logged Taster" });
-      expect(signup.status).toBe(201);
-      const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
-      expect(output).toContain(`user ${signup.body.user.id}`);
-      expect(output).not.toContain(email);
-    } finally {
-      log.mockRestore();
-    }
+    const { result: signup, output } = await withCapturedLogs(() =>
+      api.post("/auth/signup", { email, password: PASSWORD, displayName: "Logged Taster" }));
+    expect(signup.status).toBe(201);
+    expect(output).toContain(`user ${signup.body.user.id}`);
+    expect(output).not.toContain(email);
   });
 
   test("resend sends a new link while unverified", async () => {
@@ -107,16 +114,11 @@ describe("passwords", () => {
 
   test("the reset email is logged under the user's ID, not their address", async () => {
     const user = await createUser();
-    const log = jest.spyOn(console, "log").mockImplementation(() => {});
-    try {
-      const res = await api.post("/auth/password-reset/request", { email: user.email });
-      expect(res.status).toBe(200);
-      const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
-      expect(output).toContain(`user ${user.id}`);
-      expect(output).not.toContain(user.email);
-    } finally {
-      log.mockRestore();
-    }
+    const { result: res, output } = await withCapturedLogs(() =>
+      api.post("/auth/password-reset/request", { email: user.email }));
+    expect(res.status).toBe(200);
+    expect(output).toContain(`user ${user.id}`);
+    expect(output).not.toContain(user.email);
   });
 
   test("reset request doesn't reveal unknown emails", async () => {

@@ -63,6 +63,7 @@ async function sendVerificationEmail({ id, email }) {
   });
 
   const sent = await notificationService.sendAccountEmail(email, {
+    userId: id,
     type: "email_verification",
     subject: "Verify your CinCin email",
     heading: "Confirm your email",
@@ -230,6 +231,7 @@ async function requestPasswordReset(email) {
   });
 
   const sent = await notificationService.sendAccountEmail(user.email, {
+    userId: user.id,
     type: "password_reset",
     subject: "Reset your CinCin password",
     heading: "Reset your password",

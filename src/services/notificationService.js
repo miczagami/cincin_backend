@@ -233,6 +233,7 @@ async function createNotification(
   let emailSent = false;
   if (user.notifEmail && (EMAIL_TYPES.includes(type) || options.forceEmail)) {
     emailSent = await sendEmailNotification(user.email, {
+      userId: user.id,
       title,
       body,
       data,
@@ -540,11 +541,12 @@ function isTimeSensitive(type) {
 
 /**
  * Send an email notification using SendGrid with designed HTML templates.
+ * Logs name the recipient by `userId`, never by address.
  */
-async function sendEmailNotification(email, { title, body, data, type }) {
+async function sendEmailNotification(email, { userId, title, body, data, type }) {
   // Development mock
   if (config.env === "development" && !config.email.sendgridApiKey) {
-    console.log(`[Email Mock] → ${email} | ${title}`);
+    console.log(`[Email Mock] → user ${userId} | ${title}`);
     return true;
   }
 
@@ -595,10 +597,10 @@ async function sendEmailNotification(email, { title, body, data, type }) {
     }
 
     await sgMail.send(msg);
-    console.log(`[Email] Sent to ${email} | ${type} | ${title}`);
+    console.log(`[Email] Sent to user ${userId} | ${type} | ${title}`);
     return true;
   } catch (err) {
-    console.error("[Email] Send failed:", err.message);
+    console.error(`[Email] ${type} send to user ${userId} failed:`, err.message);
     // Log SendGrid-specific error details
     if (err.response?.body?.errors) {
       console.error("[Email] SendGrid errors:", JSON.stringify(err.response.body.errors));
@@ -609,14 +611,15 @@ async function sendEmailNotification(email, { title, body, data, type }) {
 
 /**
  * Send an account email with a single action link (verify email, reset password).
+ * Logs name the recipient by `userId`, never by address.
  * Unlike notification emails these bypass preferences, and click tracking is off
  * so the token link isn't rewritten. Without SendGrid outside production the link
  * is logged instead, so the flow can be completed locally.
  * @returns {Promise<boolean>} whether the email was sent (or logged)
  */
-async function sendAccountEmail(email, { type, subject, heading, body, actionUrl, actionLabel }) {
+async function sendAccountEmail(email, { userId, type, subject, heading, body, actionUrl, actionLabel }) {
   if (!config.email.sendgridApiKey && config.env !== "production") {
-    console.log(`[Email Mock] → ${email} | ${subject} | ${actionUrl}`);
+    console.log(`[Email Mock] → user ${userId} | ${subject} | ${actionUrl}`);
     return true;
   }
 
@@ -649,10 +652,10 @@ async function sendAccountEmail(email, { type, subject, heading, body, actionUrl
       trackingSettings: { clickTracking: { enable: false }, openTracking: { enable: false } },
       categories: ["account", type],
     });
-    console.log(`[Email] Sent to ${email} | ${type}`);
+    console.log(`[Email] Sent to user ${userId} | ${type}`);
     return true;
   } catch (err) {
-    console.error(`[Email] ${type} send failed:`, err.message);
+    console.error(`[Email] ${type} send to user ${userId} failed:`, err.message);
     return false;
   }
 }

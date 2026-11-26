@@ -31,6 +31,20 @@ describe("signup and email verification", () => {
     expect(me.body.emailVerified).toBe(true);
   });
 
+  test("the verification email is logged under the new user's ID, not their address", async () => {
+    const email = `logged${Date.now()}@test.com`;
+    const log = jest.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const signup = await api.post("/auth/signup", { email, password: PASSWORD, displayName: "Logged Taster" });
+      expect(signup.status).toBe(201);
+      const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+      expect(output).toContain(`user ${signup.body.user.id}`);
+      expect(output).not.toContain(email);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
   test("resend sends a new link while unverified", async () => {
     const user = await createUser({ emailVerified: false });
     const token = await api.login(user.email);
@@ -89,6 +103,20 @@ describe("passwords", () => {
 
     const reuse = await api.post("/auth/password-reset", { token, newPassword: "Another123" });
     expect(reuse.status).toBe(400);
+  });
+
+  test("the reset email is logged under the user's ID, not their address", async () => {
+    const user = await createUser();
+    const log = jest.spyOn(console, "log").mockImplementation(() => {});
+    try {
+      const res = await api.post("/auth/password-reset/request", { email: user.email });
+      expect(res.status).toBe(200);
+      const output = log.mock.calls.map((args) => args.join(" ")).join("\n");
+      expect(output).toContain(`user ${user.id}`);
+      expect(output).not.toContain(user.email);
+    } finally {
+      log.mockRestore();
+    }
   });
 
   test("reset request doesn't reveal unknown emails", async () => {

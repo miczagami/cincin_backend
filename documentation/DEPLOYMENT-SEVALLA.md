@@ -105,7 +105,7 @@ Sevalla → **Static sites** → **Add static site**:
 - Repo `miczagami/cincin_www`, branch `main`.
 - Auto-deploy on.
 - **No build command.**
-- Publish directory: `public`. Don't leave it blank: blank publishes the repo root, which would make `README.md`, `CLAUDE.md` and `docs/` public.
+- Publish directory: `public`. Don't leave it blank: blank publishes the repo root, which would make `README.md`, `CLAUDE.md` and `docs/` public. If the static site already exists, set this under its build settings and redeploy.
 - `public/_redirects` sends `www.playcincin.com/<path>` to `playcincin.com/<path>` with a 301. It works once both domains are added to this static site (step 6c–d).
 
 ## 5. Copy the data from Railway (cutover window)
@@ -152,7 +152,7 @@ Checks after each switch:
 - **apex/www:**
   - The apex loads the marketing page, and the "Get started" links reach the app.
   - `curl -sI https://www.playcincin.com/robots.txt` returns `301` with `location: https://playcincin.com/robots.txt`.
-  - `curl -sI https://playcincin.com/README.md` returns `404`.
+  - `curl -sI https://playcincin.com/README.md`, `/CLAUDE.md` and `/docs/agents/domain.md` each return `404`.
 
 Webhook URLs (Stripe, Onfido), Google/Apple sign-in origins and email links don't change, because the domains stay the same.
 

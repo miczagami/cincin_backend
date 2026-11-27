@@ -1,6 +1,7 @@
 const prisma = require("../config/database");
 const config = require("../config");
 const { AppError } = require("../utils/helpers");
+const { appLink } = require("./appLinks");
 
 // ═══════════════════════════════════════════════════════════════
 //  SUBSCRIPTION SERVICE — Phase 4 (Stripe Integration)
@@ -73,9 +74,11 @@ async function getSubscriptionStatus(userId) {
  * Requires email verification (Section 7.2).
  *
  * @param {string} userId
- * @param {object} options - { plan: 'monthly' | 'annual', successUrl, cancelUrl }
+ * @param {object} options - { plan: 'monthly' | 'annual' }
  */
-async function createCheckoutSession(userId, { plan = "monthly", successUrl, cancelUrl }) {
+// Stripe's return links are built here from APP_URL, never taken from the request, so nobody can
+// have Stripe send a paying player to another site.
+async function createCheckoutSession(userId, { plan = "monthly" }) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -138,8 +141,8 @@ async function createCheckoutSession(userId, { plan = "monthly", successUrl, can
     customer: customerId,
     mode: "subscription",
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: successUrl || `${config.appUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: cancelUrl || `${config.appUrl}/subscription/cancel`,
+    success_url: appLink("subscriptionSuccess"),
+    cancel_url: appLink("subscriptionCancel"),
     metadata: { userId: user.id, plan },
   };
 
@@ -164,7 +167,7 @@ async function createCheckoutSession(userId, { plan = "monthly", successUrl, can
 /**
  * Create Stripe billing portal session for managing subscription.
  */
-async function createBillingPortalSession(userId, { returnUrl }) {
+async function createBillingPortalSession(userId) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { stripeCustomerId: true },
@@ -176,12 +179,12 @@ async function createBillingPortalSession(userId, { returnUrl }) {
 
   const stripe = getStripe();
   if (!stripe) {
-    return { url: `${config.appUrl}/subscription/mock-portal` };
+    return { url: appLink("settings") }; // where the real portal returns the player
   }
 
   const session = await stripe.billingPortal.sessions.create({
     customer: user.stripeCustomerId,
-    return_url: returnUrl || `${config.appUrl}/settings`,
+    return_url: appLink("settings"),
   });
 
   return { url: session.url };
@@ -484,7 +487,7 @@ async function createMockCheckoutSession(userId, plan) {
 
   return {
     sessionId: `mock_session_${Date.now()}`,
-    url: `${config.appUrl}/subscription/success?mock=true`,
+    url: appLink("subscriptionMockSuccess"),
     plan,
     trialApplied: false,
     mock: true,

@@ -7,16 +7,12 @@ const { body, query } = require("express-validator");
 const checkoutRules = [
   body("plan")
     .optional()
+    .isString() // an array or object would pass isIn and reach the database
+    .withMessage("Plan must be 'monthly' or 'annual'")
+    .bail()
     .isIn(["monthly", "annual"])
     .withMessage("Plan must be 'monthly' or 'annual'"),
-  body("successUrl")
-    .optional()
-    .isURL()
-    .withMessage("successUrl must be a valid URL"),
-  body("cancelUrl")
-    .optional()
-    .isURL()
-    .withMessage("cancelUrl must be a valid URL"),
+  // Return links are built on the server (subscriptionService), so none are accepted here
 ];
 
 const affiliateClickRules = [

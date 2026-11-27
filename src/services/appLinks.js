@@ -1,5 +1,6 @@
 /**
- * Every app path the backend links to from a push notification, an email or an invite.
+ * Every app path the backend links to from a push notification, an email, an invite, or a
+ * Stripe checkout or billing-portal return.
  *
  * The app's suite (cincin_frontend tests/e2e/links.spec.js) loads this file and opens
  * every path in it, so a link added here is checked against the app's real screens.
@@ -19,6 +20,10 @@ const appPaths = {
   palateProfile: () => "/palate/profile",
   palateWrapped: () => "/palate/wrapped",
   subscription: () => "/subscription",
+  // Where Stripe returns a player; {CHECKOUT_SESSION_ID} is Stripe's own placeholder, left as is
+  subscriptionSuccess: () => "/subscription/success?session_id={CHECKOUT_SESSION_ID}",
+  subscriptionCancel: () => "/subscription/cancel",
+  subscriptionMockSuccess: () => "/subscription/success?mock=true", // development, without Stripe
   notifications: () => "/notifications",
   settings: () => "/settings",
   verifyEmail: ({ token }) => `/auth/verify-email?token=${enc(token)}`,

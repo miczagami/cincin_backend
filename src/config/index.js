@@ -11,6 +11,15 @@ if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
   throw new Error("JWT_SECRET must be set in production");
 }
 
+// AI runs on Anthropic only. A leftover provider setting from an older environment fails
+// here rather than silently changing which AI runs (or turning it off).
+for (const name of ["AI_VISION_PROVIDER", "AI_LLM_PROVIDER"]) {
+  const value = process.env[name];
+  if (value && value !== "anthropic") {
+    throw new Error(`${name}=${value} is not supported: CinCin uses Anthropic only. Remove the variable or set it to "anthropic".`);
+  }
+}
+
 module.exports = {
   env: process.env.NODE_ENV || "development",
   port: parseInt(process.env.PORT, 10) || 4000,

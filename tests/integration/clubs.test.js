@@ -45,6 +45,8 @@ test("create → join by invite code → tag game → approve → leaderboard", 
   const created = await api.post("/clubs", { name: `Smoke Club ${Date.now()}`, seasonType: "ROLLING" }, { token: hostToken });
   expect(created.status).toBe(201);
   const { id: clubId, inviteCode } = created.body;
+  // The invite link opens the app's club join screen with this code
+  expect(new URL(created.body.inviteLink).pathname + new URL(created.body.inviteLink).search).toBe(`/clubs/join?code=${inviteCode}`);
 
   // Non-members can't see it; joining by code grants access
   const member = await createUser();
@@ -73,4 +75,14 @@ test("unverified users can't create or join clubs", async () => {
   const token = await api.login(user.email);
   const res = await api.post("/clubs", { name: "Nope Club" }, { token });
   expect(res.status).toBe(403);
+});
+
+test("season history gives each season's length, so a new season can copy an ended one", async () => {
+  const created = await api.post("/clubs", { name: `Length Club ${Date.now()}`, seasonType: "FIXED_LENGTH", seasonLengthDays: 30 }, { token: hostToken });
+  expect(created.status).toBe(201);
+
+  const history = await api.get(`/clubs/${created.body.id}/seasons`, { token: hostToken });
+
+  expect(history.status).toBe(200);
+  expect(history.body[0]).toMatchObject({ seasonType: "FIXED_LENGTH", lengthDays: 30 });
 });

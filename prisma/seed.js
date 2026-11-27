@@ -1,5 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
+const { appLink } = require("../src/services/appLinks");
 
 const prisma = new PrismaClient();
 
@@ -339,7 +340,7 @@ async function main() {
         name: "Friday Night Vino",
         memberCap: 10,
         inviteCode: "FNV001",
-        inviteLink: "http://localhost:3000/club/join/FNV001",
+        inviteLink: appLink("clubJoin", { inviteCode: "FNV001" }),
         members: {
           createMany: {
             data: [

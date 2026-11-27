@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const config = require("../config");
 const prisma = require("../config/database");
 const { AppError } = require("../utils/helpers");
+const { appLink } = require("./appLinks");
 const { verifyIdToken } = require("./socialAuthService");
 const notificationService = require("./notificationService");
 
@@ -68,7 +69,7 @@ async function sendVerificationEmail({ id, email }) {
     subject: "Verify your CinCin email",
     heading: "Confirm your email",
     body: "Tap the button below to verify your email address. The link expires in 24 hours.",
-    actionUrl: `${config.appUrl}/auth/verify-email?token=${encodeURIComponent(token)}`,
+    actionUrl: appLink("verifyEmail", { token }),
     actionLabel: "Verify email",
   });
   if (!sent) throw new AppError("Could not send verification email. Please try again later.", 502);
@@ -236,7 +237,7 @@ async function requestPasswordReset(email) {
     subject: "Reset your CinCin password",
     heading: "Reset your password",
     body: "Someone asked to reset the password for this account. If it was you, tap the button below — the link expires in 1 hour. If not, you can ignore this email.",
-    actionUrl: `${config.appUrl}/auth/forgot-password?token=${token}`,
+    actionUrl: appLink("resetPassword", { token }),
     actionLabel: "Reset password",
   });
   if (!sent) console.error(`[Auth] Password reset email to user ${user.id} failed`);

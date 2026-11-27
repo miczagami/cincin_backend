@@ -101,11 +101,17 @@ DNS stays on Cloudflare. Nothing changes for users until the DNS records are swi
 
 ## 4. Marketing site (`cincin_www`)
 
+`cincin_www` serves only its `public/` folder, and Sevalla becomes its only host. Before merging the change that moved the site into `public/` (or any later change to that layout):
+- **Vercel:** disconnect the `cincin_www` project from Git (Project → Settings → Git → Disconnect), so a merge can't redeploy it with an old output setting. Its last deployment keeps serving the domains until the DNS switch in step 6, and the project is deleted in step 7. Until then the live site is frozen on that deployment: merged changes don't go live, and files it published from the old root layout stay reachable.
+- **Sevalla**, if the static site already exists: set the publish directory below and clear **Error file** first, because the merge auto-deploys.
+
 Sevalla → **Static sites** → **Add static site**:
 - Repo `miczagami/cincin_www`, branch `main`.
 - Auto-deploy on.
 - **No build command.**
-- Publish directory: the repo root (leave blank, or `.`).
+- Publish directory: `public`. Don't leave it blank: blank publishes the repo root, files that must stay private included (see the `cincin_www` README).
+- Leave **Error file** empty, so unknown paths return a real 404. (Only the app needs `index.html` there.)
+- `public/_redirects` sends `www.playcincin.com/<path>` to `playcincin.com/<path>` with a 301. It works once both domains are added to this static site (step 6c–d).
 
 ## 5. Copy the data from Railway (cutover window)
 
@@ -148,7 +154,10 @@ Checks after each switch:
   - Start a multi-device game. In DevTools → Network, the `socket.io` request should upgrade (status **101**).
   - Send a Stripe test webhook (Stripe → Developers → Webhooks → your endpoint → Send test event) and confirm it returns 2xx.
 - **app:** load, sign in, reload on a deep link.
-- **apex/www:** both load the marketing page, and the "Get started" links reach the app.
+- **apex/www:**
+  - The apex loads the marketing page, and the "Get started" links reach the app.
+  - `curl -sI https://www.playcincin.com/robots.txt` returns `301` with `location: https://playcincin.com/robots.txt`.
+  - `curl -sI https://playcincin.com/README.md`, `/CLAUDE.md` and `/docs/agents/domain.md` each return `404`.
 
 Webhook URLs (Stripe, Onfido), Google/Apple sign-in origins and email links don't change, because the domains stay the same.
 
@@ -156,6 +165,7 @@ Webhook URLs (Stripe, Onfido), Google/Apple sign-in origins and email links don'
 
 - **Railway:** delete the API service and the Postgres database (take a final dump first).
 - **Vercel:** delete both projects.
+- **`cincin_www`:** remove the README's "Moving off Vercel" section.
 - **`cincin_frontend`:** delete `vercel.json`. Sevalla doesn't use it.
 
 ---

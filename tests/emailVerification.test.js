@@ -52,12 +52,28 @@ describe("email verification", () => {
     }));
   });
 
+  test("the verification link doesn't carry the address, even encoded", async () => {
+    prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", email: "a@test.com", emailVerified: false });
+    await authService.resendVerificationEmail("u1");
+
+    expect(JSON.stringify(jwt.decode(linkToken()))).not.toContain("a@test.com");
+  });
+
   test("a link for a previous email address is rejected", async () => {
     prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", email: "old@test.com", emailVerified: false });
     await authService.resendVerificationEmail("u1");
 
     prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", email: "new@test.com", emailVerified: false, deletedAt: null });
     await expect(authService.verifyEmail(linkToken())).rejects.toMatchObject({ statusCode: 400 });
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  test("a link issued before links stopped carrying the address is rejected", async () => {
+    // Accepted break (#6): pre-deploy links held the address itself; players resend from Settings
+    const legacy = jwt.sign({ userId: "u1", email: "a@test.com", type: "email_verify" }, config.jwt.secret, { expiresIn: "24h" });
+    prisma.user.findUnique.mockResolvedValueOnce({ id: "u1", email: "a@test.com", emailVerified: false, deletedAt: null });
+
+    await expect(authService.verifyEmail(legacy)).rejects.toMatchObject({ statusCode: 400 });
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 

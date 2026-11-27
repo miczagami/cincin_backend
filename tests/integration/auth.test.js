@@ -3,6 +3,7 @@
  */
 const { startServer, client, createUser, prisma, PASSWORD } = require("./helpers");
 const notificationService = require("../../src/services/notificationService");
+const { captureConsole } = require("../captureConsole");
 
 let server;
 let api;
@@ -15,6 +16,17 @@ beforeAll(async () => {
 });
 afterAll(() => server.close());
 beforeEach(() => emailSpy.mockClear());
+
+/** Run `fn` with every console level captured; returns its result and everything logged. */
+async function withCapturedLogs(fn) {
+  const captured = captureConsole();
+  try {
+    const result = await fn();
+    return { result, output: captured.output() };
+  } finally {
+    captured.restore();
+  }
+}
 
 describe("signup and email verification", () => {
   test("signup emails a link that verifies the account", async () => {
@@ -29,6 +41,15 @@ describe("signup and email verification", () => {
 
     const me = await api.get("/users/me", { token: signup.body.accessToken });
     expect(me.body.emailVerified).toBe(true);
+  });
+
+  test("the verification email is logged under the new user's ID, not their address", async () => {
+    const email = `logged${Date.now()}@test.com`;
+    const { result: signup, output } = await withCapturedLogs(() =>
+      api.post("/auth/signup", { email, password: PASSWORD, displayName: "Logged Taster" }));
+    expect(signup.status).toBe(201);
+    expect(output).toContain(`user ${signup.body.user.id}`);
+    expect(output).not.toContain(email);
   });
 
   test("resend sends a new link while unverified", async () => {
@@ -89,6 +110,15 @@ describe("passwords", () => {
 
     const reuse = await api.post("/auth/password-reset", { token, newPassword: "Another123" });
     expect(reuse.status).toBe(400);
+  });
+
+  test("the reset email is logged under the user's ID, not their address", async () => {
+    const user = await createUser();
+    const { result: res, output } = await withCapturedLogs(() =>
+      api.post("/auth/password-reset/request", { email: user.email }));
+    expect(res.status).toBe(200);
+    expect(output).toContain(`user ${user.id}`);
+    expect(output).not.toContain(user.email);
   });
 
   test("reset request doesn't reveal unknown emails", async () => {

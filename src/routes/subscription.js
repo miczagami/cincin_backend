@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const subscriptionService = require("../services/subscriptionService");
 const { requireAuth, requireEmailVerified } = require("../middleware/auth");
-const { validate } = require("../validators/cellarClub");
+const { validate } = require("../validators/auth");
 const { checkoutRules } = require("../validators/phase4");
 const config = require("../config");
 

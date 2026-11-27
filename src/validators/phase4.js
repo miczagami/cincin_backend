@@ -7,6 +7,9 @@ const { body, query } = require("express-validator");
 const checkoutRules = [
   body("plan")
     .optional()
+    .isString() // an array or object would pass isIn and reach the database
+    .withMessage("Plan must be 'monthly' or 'annual'")
+    .bail()
     .isIn(["monthly", "annual"])
     .withMessage("Plan must be 'monthly' or 'annual'"),
   // Return links are built on the server (subscriptionService), so none are accepted here

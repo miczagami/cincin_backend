@@ -1,6 +1,7 @@
 /**
  * Smoke: subscription checkout over HTTP. Stripe isn't configured here, so checkout runs in
- * development mock mode; what matters is what the route accepts and where it sends the player.
+ * development mock mode. That Stripe gets only APP_URL return links is covered by
+ * tests/stripeReturnLinks.test.js, against a mocked Stripe client.
  */
 const { startServer, client, createUser } = require("./helpers");
 
@@ -13,23 +14,23 @@ beforeAll(async () => {
 });
 afterAll(() => server.close());
 
-test("checkout refuses a plan CinCin doesn't sell", async () => {
+test.each([["weekly"], [["monthly"]], [{ plan: "monthly" }]])("checkout refuses a plan CinCin doesn't sell: %j", async (plan) => {
   const player = await createUser();
   const token = await api.login(player.email);
 
-  const res = await api.post("/subscription/checkout", { plan: "weekly" }, { token });
+  const res = await api.post("/subscription/checkout", { plan }, { token });
 
   expect(res.status).toBe(400);
 });
 
-test("checkout sends the player back to the app, whatever return links the request names", async () => {
+test("development checkout lands the player on the app's success screen", async () => {
   const player = await createUser();
   const token = await api.login(player.email);
 
-  const res = await api.post("/subscription/checkout", {
-    plan: "monthly", successUrl: "https://evil.example/phish", cancelUrl: "https://evil.example/cancel",
-  }, { token });
+  const res = await api.post("/subscription/checkout", { plan: "monthly" }, { token });
 
   expect(res.status).toBe(200);
-  expect(new URL(res.body.url).origin).toBe(new URL(process.env.APP_URL || "https://app.playcincin.com").origin);
+  const landing = new URL(res.body.url);
+  expect(landing.origin).toBe(new URL(process.env.APP_URL || "https://app.playcincin.com").origin);
+  expect(landing.pathname).toBe("/subscription/success");
 });

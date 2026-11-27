@@ -434,13 +434,6 @@ async function searchFlavours(query, { limit = 10, drinkType = null } = {}) {
  * Returns extracted text, product identification, and confidence.
  */
 async function callVisionAPI(imageBase64, mimeType) {
-  return callAnthropicVision(imageBase64, mimeType);
-}
-
-/**
- * Anthropic Claude Vision integration.
- */
-async function callAnthropicVision(imageBase64, mimeType) {
   let result;
   try {
     result = await aiClient.createMessage("vision", {
@@ -483,10 +476,6 @@ If you cannot identify the bottle, set confidence to 0. Do not include markdown.
  * Call Claude for tasting note synthesis.
  */
 async function callLLM(prompt) {
-  return callAnthropicLLM(prompt);
-}
-
-async function callAnthropicLLM(prompt) {
   try {
     const result = await aiClient.createMessage("synthesis", {
       system: prompt.system,

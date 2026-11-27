@@ -487,7 +487,7 @@ async function createMockCheckoutSession(userId, plan) {
 
   return {
     sessionId: `mock_session_${Date.now()}`,
-    url: `${config.appUrl}/subscription/success?mock=true`,
+    url: appLink("subscriptionMockSuccess"),
     plan,
     trialApplied: false,
     mock: true,

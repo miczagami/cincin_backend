@@ -22,15 +22,17 @@ const subscriptionService = require("../src/services/subscriptionService");
 
 const APP = config.appUrl;
 const FOREIGN = { successUrl: "https://evil.example/phish", cancelUrl: "https://evil.example/cancel", returnUrl: "https://evil.example/portal" };
-const saved = { ...config.stripe, env: config.env };
+const savedStripe = { ...config.stripe };
+const savedEnv = config.env;
 
 beforeEach(() => {
   jest.clearAllMocks();
   Object.assign(config.stripe, { secretKey: "sk_test_x", monthlyPriceId: "price_m", annualPriceId: "price_a" });
 });
+afterEach(() => jest.restoreAllMocks());
 afterAll(() => {
-  Object.assign(config.stripe, saved);
-  config.env = saved.env;
+  Object.assign(config.stripe, savedStripe);
+  config.env = savedEnv;
 });
 
 test("checkout returns the player to the app's success and cancel screens, whatever the request names", async () => {

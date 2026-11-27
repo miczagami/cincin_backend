@@ -214,6 +214,10 @@ async function createNotification(
     },
   });
 
+  // Push and email build their link from the type (buildDeepLink) and the app routes taps by
+  // data.type, but callers pass the type beside the data, so it goes into what they send
+  const deliveryData = { ...(data || {}), type };
+
   // 2. Push notification (if user opted in and type not excluded)
   let pushSent = false;
   if (
@@ -221,7 +225,7 @@ async function createNotification(
     !PUSH_EXCLUDED_TYPES.includes(type) &&
     (options.forcePush || true)
   ) {
-    pushSent = await sendPushNotification(userId, { title, body, data, type });
+    pushSent = await sendPushNotification(userId, { title, body, data: deliveryData, type });
     if (pushSent) {
       await prisma.notification.update({
         where: { id: notification.id },
@@ -237,7 +241,7 @@ async function createNotification(
       userId: user.id,
       title,
       body,
-      data,
+      data: deliveryData,
       type,
     });
     if (emailSent) {

@@ -53,7 +53,7 @@ DNS stays on Cloudflare. Nothing changes for users until the DNS records are swi
    | `CORS_ORIGIN` | `https://app.playcincin.com` |
    | `APP_URL` | `https://app.playcincin.com` |
    | `CLIENT_IP_HEADER` | `cf-connecting-ip` |
-   | everything else | Copy from Railway: AI keys, Stripe, SendGrid, Onfido, Google/Apple client IDs, Firebase, APNs, rate limits. Skip any value naming `getcincin.com` (for example `EMAIL_FROM_ADDRESS` or `APNS_BUNDLE_ID`): leave it unset to get the playcincin.com default, or set the playcincin.com value. |
+   | everything else | Copy from Railway: AI keys, Stripe, SendGrid, Onfido, Google/Apple client IDs, Firebase, APNs, rate limits. Exceptions: a `getcincin.com` email or URL value (for example `EMAIL_FROM_ADDRESS`) is left unset to get the playcincin.com default, or set to the playcincin.com value. Bundle IDs (`APNS_BUNDLE_ID`, `APPLE_CLIENT_IDS`) stay exactly as on Railway: an installed iOS app's bundle ID can't change. |
 
    Leave these out:
    - `PORT`: Sevalla sets it.
@@ -63,6 +63,8 @@ DNS stays on Cloudflare. Nothing changes for users until the DNS records are swi
    - **Commas:** Sevalla breaks on unescaped commas in values. `CORS_ORIGIN` is a single origin, so that's fine.
    - **`FIREBASE_SERVICE_ACCOUNT`:** paste the service-account JSON **base64-encoded** (`base64 -w0 service-account.json`). The API accepts JSON, base64 JSON, or a file path.
    - **`APNS_KEY_PATH`:** can hold the `.p8` key contents instead of a path.
+
+   Email sender: with `EMAIL_FROM_ADDRESS` unset, mail goes out from `noreply@playcincin.com`. SendGrid rejects a sender whose domain isn't authenticated, and the API only logs it (a password-reset request still tells the player a link was sent). Before the API runs on that sender, authenticate `playcincin.com` in SendGrid (Settings → Sender Authentication, with its DNS records in Cloudflare) and send one test email.
 5. **Processes:**
    - **Web process:**
      - Instances: **1** (see "Why one instance" below).

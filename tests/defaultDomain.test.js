@@ -36,7 +36,7 @@ test("emails come from a playcincin.com address by default", async () => {
     actionUrl: "https://app.playcincin.com/auth/forgot-password?token=abc", actionLabel: "Reset password",
   });
 
-  expect(mockSend.mock.calls.at(-1)[0].from.email).toBe("noreply@playcincin.com");
+  expect(mockSend.mock.calls.at(-1)[0].from).toEqual({ email: "noreply@playcincin.com", name: "CinCin" });
 });
 
 test("a notification's tap link opens the app on playcincin.com by default", () => {
@@ -51,4 +51,14 @@ test("an email's links open the app on playcincin.com by default", () => {
   const html = notificationService.buildEmailHtml("payment_failed", { title: "Payment failed", body: "Update your card.", data: {} });
 
   expect(html).toContain('href="https://app.playcincin.com/settings"');
+});
+
+test("iOS pushes go to the playcincin.com app by default", () => {
+  let config;
+  const saved = process.env.APNS_BUNDLE_ID;
+  delete process.env.APNS_BUNDLE_ID;
+  jest.isolateModules(() => { config = require("../src/config"); });
+  if (saved !== undefined) process.env.APNS_BUNDLE_ID = saved;
+
+  expect(config.push.apnsBundleId).toBe("com.playcincin.app");
 });

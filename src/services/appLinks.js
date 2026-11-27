@@ -13,7 +13,6 @@ const appPaths = {
   gameJoin: ({ gameCode }) => (gameCode ? `/game/join?code=${enc(gameCode)}` : "/game/join"),
   clubJoin: ({ inviteCode }) => `/clubs/join?code=${enc(inviteCode)}`,
   club: ({ clubId }) => (clubId ? `/clubs/${enc(clubId)}` : "/clubs"),
-  clubSeasonEnd: ({ clubId }) => (clubId ? `/clubs/${enc(clubId)}/season-end` : "/clubs"),
   palateProfile: () => "/palate/profile",
   palateWrapped: () => "/palate/wrapped",
   subscription: () => "/subscription",

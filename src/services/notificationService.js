@@ -467,10 +467,10 @@ function buildDeepLink(data) {
     case "club_member_joined":
     case "club_approval":
     case "weekly_standings":
-      return appLink("club", data);
+    // The club screen shows its season and standings (the app's season-end screen is the admin's "end season" step)
     case "season_ending":
     case "season_ended":
-      return appLink("clubSeasonEnd", data);
+      return appLink("club", data);
     case "palate_updated":
       return appLink("palateProfile");
     case "monthly_palate_wrapped":

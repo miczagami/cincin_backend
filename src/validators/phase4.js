@@ -9,14 +9,7 @@ const checkoutRules = [
     .optional()
     .isIn(["monthly", "annual"])
     .withMessage("Plan must be 'monthly' or 'annual'"),
-  body("successUrl")
-    .optional()
-    .isURL()
-    .withMessage("successUrl must be a valid URL"),
-  body("cancelUrl")
-    .optional()
-    .isURL()
-    .withMessage("cancelUrl must be a valid URL"),
+  // Return links are built on the server (subscriptionService), so none are accepted here
 ];
 
 const affiliateClickRules = [

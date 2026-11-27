@@ -19,6 +19,9 @@ const appPaths = {
   palateProfile: () => "/palate/profile",
   palateWrapped: () => "/palate/wrapped",
   subscription: () => "/subscription",
+  // Where Stripe returns a player; {CHECKOUT_SESSION_ID} is Stripe's own placeholder, left as is
+  subscriptionSuccess: () => "/subscription/success?session_id={CHECKOUT_SESSION_ID}",
+  subscriptionCancel: () => "/subscription/cancel",
   notifications: () => "/notifications",
   settings: () => "/settings",
   verifyEmail: ({ token }) => `/auth/verify-email?token=${enc(token)}`,

@@ -38,7 +38,6 @@ afterEach(() => {
   config.email.sendgridApiKey = originalKey;
 });
 
-const output = () => captured.output();
 
 describe("account emails", () => {
   test("a sent account email logs the user ID, not the address", async () => {
@@ -47,8 +46,8 @@ describe("account emails", () => {
 
     await expect(notificationService.sendAccountEmail(USER.email, { ...ACCOUNT_EMAIL, userId: USER.id })).resolves.toBe(true);
 
-    expect(output()).toContain(`user ${USER.id}`);
-    expect(output()).not.toContain(USER.email);
+    expect(captured.output()).toContain(`user ${USER.id}`);
+    expect(captured.output()).not.toContain(USER.email);
   });
 
   test("a failed account email logs the user ID, not the address", async () => {
@@ -58,8 +57,8 @@ describe("account emails", () => {
 
     await expect(notificationService.sendAccountEmail(USER.email, { ...ACCOUNT_EMAIL, userId: USER.id })).resolves.toBe(false);
 
-    expect(output()).toContain(`user ${USER.id}`);
-    expect(output()).not.toContain(USER.email);
+    expect(captured.output()).toContain(`user ${USER.id}`);
+    expect(captured.output()).not.toContain(USER.email);
   });
 
   test("without SendGrid, the logged stand-in names the user ID, not the address", async () => {
@@ -68,8 +67,8 @@ describe("account emails", () => {
 
     await expect(notificationService.sendAccountEmail(USER.email, { ...ACCOUNT_EMAIL, userId: USER.id })).resolves.toBe(true);
 
-    expect(output()).toContain(`user ${USER.id}`);
-    expect(output()).not.toContain(USER.email);
+    expect(captured.output()).toContain(`user ${USER.id}`);
+    expect(captured.output()).not.toContain(USER.email);
   });
 });
 
@@ -87,8 +86,8 @@ describe("notification emails", () => {
 
     await expect(notificationService.sendEmailNotification(USER.email, { ...NOTIFICATION_EMAIL, userId: USER.id })).resolves.toBe(true);
 
-    expect(output()).toContain(`user ${USER.id}`);
-    expect(output()).not.toContain(USER.email);
+    expect(captured.output()).toContain(`user ${USER.id}`);
+    expect(captured.output()).not.toContain(USER.email);
   });
 
   test("a failed notification email logs the user ID, not the address", async () => {
@@ -98,8 +97,8 @@ describe("notification emails", () => {
 
     await expect(notificationService.sendEmailNotification(USER.email, { ...NOTIFICATION_EMAIL, userId: USER.id })).resolves.toBe(false);
 
-    expect(output()).toContain(`user ${USER.id}`);
-    expect(output()).not.toContain(USER.email);
+    expect(captured.output()).toContain(`user ${USER.id}`);
+    expect(captured.output()).not.toContain(USER.email);
   });
 
   test("without SendGrid in development, the logged stand-in names the user ID, not the address", async () => {
@@ -108,8 +107,8 @@ describe("notification emails", () => {
 
     await expect(notificationService.sendEmailNotification(USER.email, { ...NOTIFICATION_EMAIL, userId: USER.id })).resolves.toBe(true);
 
-    expect(output()).toContain(`user ${USER.id}`);
-    expect(output()).not.toContain(USER.email);
+    expect(captured.output()).toContain(`user ${USER.id}`);
+    expect(captured.output()).not.toContain(USER.email);
   });
 });
 
@@ -122,7 +121,7 @@ describe("delivering a notification", () => {
     const result = await notificationService.createNotification(USER.id, NOTIFICATION_EMAIL);
 
     expect(result.emailSent).toBe(true);
-    expect(output()).toContain(`user ${USER.id}`);
-    expect(output()).not.toContain(USER.email);
+    expect(captured.output()).toContain(`user ${USER.id}`);
+    expect(captured.output()).not.toContain(USER.email);
   });
 });

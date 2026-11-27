@@ -340,8 +340,9 @@ async function sendFCM(token, { title, body, data }) {
     // Web push specific options
     webpush: {
       notification: {
-        icon: "/icons/icon-192x192.png",
-        badge: "/icons/badge-72x72.png",
+        // Files the app serves (cincin_frontend/public)
+        icon: "/icon-192.png",
+        badge: "/badge-72.png",
         vibrate: [100, 50, 100],
         actions: getNotificationActions(data?.type),
       },

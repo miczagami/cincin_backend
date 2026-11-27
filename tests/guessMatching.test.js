@@ -28,13 +28,23 @@ beforeEach(() => {
   process.env.ANTHROPIC_API_KEY = "test-key";
 });
 
-test("the AI checks guesses whenever the Claude client has a key, whichever variable holds it", async () => {
-  delete process.env.ANTHROPIC_API_KEY; // e.g. only the AI_SERVICE_API_KEY alias is set
+test("the AI checks guesses whenever the Claude client reports a key, not only when ANTHROPIC_API_KEY is set", async () => {
+  delete process.env.ANTHROPIC_API_KEY; // e.g. only the AI_SERVICE_API_KEY alias is set (aiClient.test.js covers the lookup)
   aiSays({ matched: true, matchedNoteId: "n2", isSpecific: true, confidence: 0.9, reasoning: "humidor = cigar box" });
 
   const result = await evaluateGuess("humidor", notes, game);
 
   expect(result.matchType).toBe("AI_EVALUATED");
+});
+
+test("without a key, guesses are not sent to the AI", async () => {
+  mockHasApiKey = false;
+  aiSays({ matched: true, matchedNoteId: "n2", isSpecific: true, confidence: 0.9, reasoning: "humidor = cigar box" });
+
+  const result = await evaluateGuess("humidor", notes, game);
+
+  expect(mockCreateMessage).not.toHaveBeenCalled();
+  expect(result.matchType).not.toBe("AI_EVALUATED");
 });
 
 test("a synonym the AI confirms is matched", async () => {

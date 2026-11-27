@@ -63,8 +63,8 @@ module.exports = {
   // Redis
   redisUrl: process.env.REDIS_URL || null,
 
-  // AI (Anthropic only; see the provider check at the top)
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+  // AI (Anthropic only; see the provider check at the top). The key is read by
+  // services/aiClient.js, which also accepts the AI_SERVICE_API_KEY alias.
 
   // Claude models per role (read by services/aiClient.js). Model IDs are config so a
   // retired model is an env change. `thinking: "off"` uses each model's own off switch.

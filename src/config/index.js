@@ -11,6 +11,15 @@ if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
   throw new Error("JWT_SECRET must be set in production");
 }
 
+// AI runs on Anthropic only. A leftover provider setting from an older environment fails
+// here rather than silently changing which AI runs (or turning it off).
+for (const name of ["AI_VISION_PROVIDER", "AI_LLM_PROVIDER"]) {
+  const value = process.env[name];
+  if (value && value !== "anthropic") {
+    throw new Error(`${name}=${JSON.stringify(value)} is not supported: CinCin uses Anthropic only. Remove the variable or set it to "anthropic".`);
+  }
+}
+
 module.exports = {
   env: process.env.NODE_ENV || "development",
   port: parseInt(process.env.PORT, 10) || 4000,
@@ -54,12 +63,8 @@ module.exports = {
   // Redis
   redisUrl: process.env.REDIS_URL || null,
 
-  // AI Providers
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY,
-  openaiApiKey: process.env.OPENAI_API_KEY,
-  googleVisionApiKey: process.env.GOOGLE_VISION_API_KEY,
-  visionProvider: process.env.AI_VISION_PROVIDER || "anthropic",
-  llmProvider: process.env.AI_LLM_PROVIDER || "anthropic",
+  // AI (Anthropic only; see the provider check at the top). The key is read by
+  // services/aiClient.js, which also accepts the AI_SERVICE_API_KEY alias.
 
   // Claude models per role (read by services/aiClient.js). Model IDs are config so a
   // retired model is an env change. `thinking: "off"` uses each model's own off switch.

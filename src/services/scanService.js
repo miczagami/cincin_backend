@@ -258,7 +258,7 @@ async function sourceTastingNotes(bottleId) {
  * AI-synthesise tasting notes for a bottle using an LLM.
  * Uses the bottle's metadata to generate plausible notes.
  *
- * In production, this calls an LLM (Claude/GPT) with the bottle's
+ * In production, this calls Claude with the bottle's
  * category, subcategory, region, and producer to generate typical
  * tasting notes. These are tagged as AI_SYNTHESISED.
  */
@@ -425,138 +425,15 @@ async function searchFlavours(query, { limit = 10, drinkType = null } = {}) {
 
 // ═══════════════════════════════════════════════════════════════
 //  VISION AI & LLM INTEGRATION LAYER
-//  These are the external API call wrappers.
-//  Phase 1 uses configurable providers — swap implementations
-//  without touching business logic.
+//  These are the external API call wrappers. Every call goes
+//  through the shared Claude client (services/aiClient.js).
 // ═══════════════════════════════════════════════════════════════
 
 /**
- * Call the cloud vision API to analyse a bottle label image.
+ * Analyse a bottle label image with Claude (the only AI provider).
  * Returns extracted text, product identification, and confidence.
- *
- * Provider options (configured via AI_VISION_PROVIDER env):
- * - google_vision: Google Cloud Vision API
- * - openai: OpenAI GPT-4 Vision
- * - anthropic: Claude Vision
- *
- * All providers are normalised to return the same shape.
  */
 async function callVisionAPI(imageBase64, mimeType) {
-  const provider = process.env.AI_VISION_PROVIDER || "anthropic";
-
-  switch (provider) {
-    case "google_vision":
-      return callGoogleVision(imageBase64, mimeType);
-    case "openai":
-      return callOpenAIVision(imageBase64, mimeType);
-    case "anthropic":
-    default:
-      return callAnthropicVision(imageBase64, mimeType);
-  }
-}
-
-/**
- * Google Cloud Vision API integration.
- */
-async function callGoogleVision(imageBase64, mimeType) {
-  const apiKey = process.env.GOOGLE_VISION_API_KEY;
-  if (!apiKey) throw new AppError("Google Vision API key not configured", 503);
-
-  const response = await fetch(
-    `https://vision.googleapis.com/v1/images:annotate?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        requests: [{
-          image: { content: imageBase64 },
-          features: [
-            { type: "TEXT_DETECTION", maxResults: 10 },
-            { type: "LOGO_DETECTION", maxResults: 5 },
-            { type: "WEB_DETECTION", maxResults: 5 },
-          ],
-        }],
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    throw new AppError(`Vision API error: ${response.status}`, 502);
-  }
-
-  const data = await response.json();
-  const result = data.responses?.[0];
-
-  return {
-    provider: "google_vision",
-    textAnnotations: result?.textAnnotations || [],
-    logoAnnotations: result?.logoAnnotations || [],
-    webDetection: result?.webDetection || {},
-    rawText: result?.textAnnotations?.[0]?.description || "",
-  };
-}
-
-/**
- * OpenAI GPT-4 Vision integration.
- */
-async function callOpenAIVision(imageBase64, mimeType) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new AppError("OpenAI API key not configured", 503);
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o",
-      messages: [{
-        role: "user",
-        content: [
-          {
-            type: "image_url",
-            image_url: { url: `data:${mimeType};base64,${imageBase64}` },
-          },
-          {
-            type: "text",
-            text: `Analyse this bottle label image. Return ONLY a JSON object with:
-{
-  "brand": "producer/brand name",
-  "product": "full product name",
-  "vintage": year or null,
-  "region": "region of origin",
-  "country": "country",
-  "category": "WINE" or "BEER" or "SPIRITS" or "OTHER",
-  "subcategory": "e.g. Shiraz, Pale Ale, Single Malt",
-  "confidence": 0.0 to 1.0
-}
-If you cannot identify the bottle, set confidence to 0.`,
-          },
-        ],
-      }],
-      max_tokens: 300,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new AppError(`OpenAI API error: ${response.status}`, 502);
-  }
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content || "";
-
-  return {
-    provider: "openai",
-    rawResponse: content,
-    ...parseVisionJSON(content),
-  };
-}
-
-/**
- * Anthropic Claude Vision integration.
- */
-async function callAnthropicVision(imageBase64, mimeType) {
   let result;
   try {
     result = await aiClient.createMessage("vision", {
@@ -596,22 +473,9 @@ If you cannot identify the bottle, set confidence to 0. Do not include markdown.
 }
 
 /**
- * Call an LLM for tasting note synthesis.
- * Uses the same provider routing as vision.
+ * Call Claude for tasting note synthesis.
  */
 async function callLLM(prompt) {
-  const provider = process.env.AI_LLM_PROVIDER || process.env.AI_VISION_PROVIDER || "anthropic";
-
-  switch (provider) {
-    case "openai":
-      return callOpenAILLM(prompt);
-    case "anthropic":
-    default:
-      return callAnthropicLLM(prompt);
-  }
-}
-
-async function callAnthropicLLM(prompt) {
   try {
     const result = await aiClient.createMessage("synthesis", {
       system: prompt.system,
@@ -622,32 +486,6 @@ async function callAnthropicLLM(prompt) {
     if (err instanceof AppError) throw err;
     throw new AppError(`Anthropic LLM error: ${err.status || err.message}`, 502);
   }
-}
-
-async function callOpenAILLM(prompt) {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new AppError("OpenAI API key not configured", 503);
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: prompt.system },
-        { role: "user", content: prompt.user },
-      ],
-      max_tokens: 600,
-    }),
-  });
-
-  if (!response.ok) throw new AppError(`OpenAI LLM error: ${response.status}`, 502);
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || "";
 }
 
 // ═══════════════════════════════════════════════════════════════

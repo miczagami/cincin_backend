@@ -143,7 +143,7 @@ cincin-backend/
 - Region-dependent age requirements (AU/NZ 18+, US 21+)
 
 ### AI Pipeline v1 (Weeks 1–4) ✅
-- Multi-provider vision API (Anthropic Claude, OpenAI GPT-4o, Google Vision)
+- Label vision with Anthropic Claude
 - Label recognition → bottle identification with confidence scoring
 - Confidence states: HIGH (≥80%), MEDIUM (50–79%), LOW (<50%), NONE
 - Bottle matching engine (exact match, fuzzy match, scoring, alternatives)
@@ -180,7 +180,7 @@ cincin-backend/
 - Guess evaluation engine (3-pass):
   1. Exact match (case-insensitive)
   2. Generic category match via taxonomy parent-child relationships
-  3. AI evaluation for synonyms, regional terms, alt spellings (Anthropic/OpenAI)
+  3. AI evaluation for synonyms, regional terms, alt spellings (Anthropic Claude)
 - Scoring engine: generic/specific × producer/critic tiers (Appendix B)
 - Opt-out mechanic for both registered and guest players (Section 4.5)
 - Auto-skip endpoint for timer expiry (0 points, Section 4.4)

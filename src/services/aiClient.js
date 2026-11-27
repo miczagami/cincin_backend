@@ -15,8 +15,18 @@ const { AppError } = require("../utils/helpers");
 let client = null;
 let clientKey = null;
 
+/** The Anthropic API key, from ANTHROPIC_API_KEY or its AI_SERVICE_API_KEY alias. */
+function readApiKey() {
+  return process.env.ANTHROPIC_API_KEY || process.env.AI_SERVICE_API_KEY;
+}
+
+/** Whether AI calls can be made at all, for callers that skip AI without a key. */
+function hasApiKey() {
+  return Boolean(readApiKey());
+}
+
 function getClient() {
-  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.AI_SERVICE_API_KEY;
+  const apiKey = readApiKey();
   if (!apiKey) throw new AppError("Anthropic API key not configured", 503);
   if (!client || clientKey !== apiKey) {
     client = new Anthropic({ apiKey });
@@ -118,4 +128,4 @@ async function createMessage(role, { system, content, maxTokens, effort, thinkin
   }
 }
 
-module.exports = { createMessage, textOf, buildParams };
+module.exports = { createMessage, textOf, buildParams, hasApiKey };

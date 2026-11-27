@@ -140,6 +140,19 @@ test("no API key fails fast with a 503 and no request", async () => {
   expect(mockCreate).not.toHaveBeenCalled();
 });
 
+test("the client has a key when either ANTHROPIC_API_KEY or its AI_SERVICE_API_KEY alias is set", () => {
+  delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.AI_SERVICE_API_KEY;
+  expect(aiClient.hasApiKey()).toBe(false);
+
+  process.env.AI_SERVICE_API_KEY = "alias-key";
+  expect(aiClient.hasApiKey()).toBe(true);
+
+  delete process.env.AI_SERVICE_API_KEY;
+  process.env.ANTHROPIC_API_KEY = "test-key";
+  expect(aiClient.hasApiKey()).toBe(true);
+});
+
 test("AI_INFERENCE_GEO is sent as inference_geo", async () => {
   config.ai.inferenceGeo = "us";
   mockCreate.mockResolvedValue(reply("claude-haiku-5-5", [{ type: "text", text: "{}" }]));

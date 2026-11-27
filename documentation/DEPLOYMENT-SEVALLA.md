@@ -52,8 +52,6 @@ DNS stays on Cloudflare. Nothing changes for users until the DNS records are swi
    | `JWT_SECRET` | **Same value as on Railway.** A new value logs everyone out. |
    | `CORS_ORIGIN` | `https://app.playcincin.com` |
    | `APP_URL` | `https://app.playcincin.com` |
-   | `SHARE_BASE_URL` | `https://app.playcincin.com` |
-   | `API_BASE_URL` | `https://api.playcincin.com` |
    | `CLIENT_IP_HEADER` | `cf-connecting-ip` |
    | everything else | Copy from Railway: AI keys, Stripe, SendGrid, Onfido, Google/Apple client IDs, Firebase, APNs, rate limits. |
 

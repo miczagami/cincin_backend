@@ -127,6 +127,9 @@ jobs:
           BACKEND_DIR: ${{ github.workspace }}
         run: |
           npm ci
+          # The runner's Microsoft apt source (not needed here) sometimes answers 403, which fails
+          # the apt-get update that --with-deps runs; drop it so only Ubuntu's mirrors are read
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list /etc/apt/sources.list.d/microsoft-prod.sources
           npx playwright install --with-deps chromium
           npx playwright test tests/e2e/links.spec.js --project smoke
 

@@ -4,7 +4,7 @@
  * The app's suite (cincin_frontend tests/e2e/links.spec.js) loads this file and opens
  * every path in it, so a link added here is checked against the app's real screens.
  * Keep it free of other requires for that reason: each entry takes one object of named
- * params ({ gameCode, inviteCode, clubId, token }) and returns a path on the app.
+ * params ({ gameCode, inviteCode, clubId, seasonId, token }) and returns a path on the app.
  */
 const enc = encodeURIComponent;
 
@@ -13,6 +13,9 @@ const appPaths = {
   gameJoin: ({ gameCode }) => (gameCode ? `/game/join?code=${enc(gameCode)}` : "/game/join"),
   clubJoin: ({ inviteCode }) => `/clubs/join?code=${enc(inviteCode)}`,
   club: ({ clubId }) => (clubId ? `/clubs/${enc(clubId)}` : "/clubs"),
+  // An ended season's final standings and awards (without a season, the club itself)
+  seasonResults: ({ clubId, seasonId }) =>
+    clubId && seasonId ? `/clubs/${enc(clubId)}/season-end/${enc(seasonId)}` : appPaths.club({ clubId }),
   palateProfile: () => "/palate/profile",
   palateWrapped: () => "/palate/wrapped",
   subscription: () => "/subscription",

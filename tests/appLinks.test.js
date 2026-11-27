@@ -16,7 +16,8 @@ describe("push and email deep links", () => {
     [{ type: "game_invite", gameCode: "ABC123" }, "/game/join?code=ABC123"],
     [{ type: "game_invite" }, "/game/join"],
     [{ type: "season_ending", clubId: "club-1", seasonId: "s-1" }, "/clubs/club-1"],
-    [{ type: "season_ended", clubId: "club-1", seasonId: "s-1" }, "/clubs/club-1"],
+    [{ type: "season_ended", clubId: "club-1", seasonId: "s-1" }, "/clubs/club-1/season-end/s-1"],
+    [{ type: "season_ended", clubId: "club-1" }, "/clubs/club-1"],
     [{ type: "club_member_joined", clubId: "club-1" }, "/clubs/club-1"],
     [{ type: "weekly_standings", clubId: "club-1" }, "/clubs/club-1"],
     [{ type: "club_game_approved" }, "/clubs"],
@@ -29,7 +30,7 @@ describe("push and email deep links", () => {
   });
 
   test("IDs and codes are encoded into the path", () => {
-    expect(notificationService.buildDeepLink({ type: "season_ended", clubId: "a/b c" })).toBe(`${APP}/clubs/a%2Fb%20c`);
+    expect(notificationService.buildDeepLink({ type: "season_ended", clubId: "a/b c", seasonId: "s/1" })).toBe(`${APP}/clubs/a%2Fb%20c/season-end/s%2F1`);
     expect(notificationService.buildDeepLink({ type: "game_invite", gameCode: "A&B" })).toBe(`${APP}/game/join?code=A%26B`);
   });
 });
@@ -45,7 +46,7 @@ describe("the app paths the backend links to", () => {
   });
 
   test("every path is a same-app path, built from named params alone", () => {
-    const params = { gameCode: "ABC123", inviteCode: "WINE42", clubId: "club-1", token: "t0k" };
+    const params = { gameCode: "ABC123", inviteCode: "WINE42", clubId: "club-1", seasonId: "s-1", token: "t0k" };
     for (const [name, pathFor] of Object.entries(appPaths)) {
       expect(pathFor(params)).toMatch(/^\/(?!\/)/, name);
     }

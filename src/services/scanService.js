@@ -258,7 +258,7 @@ async function sourceTastingNotes(bottleId) {
  * AI-synthesise tasting notes for a bottle using an LLM.
  * Uses the bottle's metadata to generate plausible notes.
  *
- * In production, this calls an LLM (Claude/GPT) with the bottle's
+ * In production, this calls Claude with the bottle's
  * category, subcategory, region, and producer to generate typical
  * tasting notes. These are tagged as AI_SYNTHESISED.
  */

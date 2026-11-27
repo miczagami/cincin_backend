@@ -42,7 +42,7 @@ test("emails come from a playcincin.com address by default", async () => {
 test("a notification's tap link opens the app on playcincin.com by default", () => {
   const { notificationService } = loadWithDefaults();
 
-  expect(notificationService.buildDeepLink(null)).toBe("https://app.playcincin.com");
+  expect(notificationService.buildDeepLink(null)).toBe("https://app.playcincin.com/");
 });
 
 test("an email's links open the app on playcincin.com by default", () => {

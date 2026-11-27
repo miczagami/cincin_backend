@@ -1,6 +1,7 @@
 const prisma = require("../config/database");
 const config = require("../config");
 const { AppError } = require("../utils/helpers");
+const { appLink } = require("./appLinks");
 
 // ═══════════════════════════════════════════════════════════════
 //  NOTIFICATION SERVICE — Priority 3 (Production)
@@ -456,30 +457,28 @@ function isTokenExpired(err) {
  * Build a deep link URL for the notification tap action.
  */
 function buildDeepLink(data) {
-  const appUrl = config.appUrl;
-  if (!data) return appUrl;
+  if (!data) return appLink("home");
 
   switch (data.type) {
     case "game_invite":
-      return `${appUrl}/join/${data.gameCode || ""}`;
+      return appLink("gameJoin", data);
     case "club_game_approved":
     case "club_game_rejected":
     case "club_member_joined":
     case "club_approval":
-      return `${appUrl}/clubs/${data.clubId || ""}`;
+    case "weekly_standings":
+      return appLink("club", data);
     case "season_ending":
     case "season_ended":
-      return `${appUrl}/clubs/${data.clubId || ""}/season`;
+      return appLink("clubSeasonEnd", data);
     case "palate_updated":
-      return `${appUrl}/palate/profile`;
+      return appLink("palateProfile");
     case "monthly_palate_wrapped":
-      return `${appUrl}/palate/wrapped`;
-    case "weekly_standings":
-      return `${appUrl}/clubs/${data.clubId || ""}`;
+      return appLink("palateWrapped");
     case "payment_failed":
-      return `${appUrl}/subscription`;
+      return appLink("subscription");
     default:
-      return `${appUrl}/notifications`;
+      return appLink("notifications");
   }
 }
 
@@ -702,23 +701,22 @@ function flattenData(data) {
  * Falls back to generic template for unknown types.
  */
 function buildEmailHtml(type, { title, body, data }) {
-  const appUrl = config.appUrl;
   const deepLink = buildDeepLink(data);
 
   switch (type) {
     case "monthly_palate_wrapped":
-      return buildWrappedEmail({ title, body, data, appUrl, deepLink });
+      return buildWrappedEmail({ title, body, data, deepLink });
     case "quarterly_summary":
-      return buildQuarterlySummaryEmail({ title, body, data, appUrl, deepLink });
+      return buildQuarterlySummaryEmail({ title, body, data, deepLink });
     case "season_ended":
     case "season_end_report":
-      return buildSeasonEndEmail({ title, body, data, appUrl, deepLink });
+      return buildSeasonEndEmail({ title, body, data, deepLink });
     case "payment_failed":
-      return buildPaymentFailedEmail({ title, body, data, appUrl, deepLink });
+      return buildPaymentFailedEmail({ title, body, data, deepLink });
     case "club_membership_reduced":
-      return buildMembershipReducedEmail({ title, body, data, appUrl, deepLink });
+      return buildMembershipReducedEmail({ title, body, data, deepLink });
     default:
-      return buildGenericEmail({ title, body, appUrl, deepLink });
+      return buildGenericEmail({ title, body, deepLink });
   }
 }
 
@@ -801,9 +799,9 @@ function emailWrapper(content) {
               <p style="font-size:12px;color:#737373;margin:0;">
                 You're receiving this because of your CinCin notification preferences.
                 <br>
-                <a href="${config.appUrl}/settings" style="color:#22D3EE;">Manage preferences</a>
+                <a href="${appLink("settings")}" style="color:#22D3EE;">Manage preferences</a>
                 &nbsp;·&nbsp;
-                <a href="${config.appUrl}" style="color:#22D3EE;">Open CinCin</a>
+                <a href="${appLink("home")}" style="color:#22D3EE;">Open CinCin</a>
               </p>
               <p style="font-size:11px;color:#525252;margin:12px 0 0;">
                 &copy; ${new Date().getFullYear()} CinCin Pty Ltd · Melbourne, Australia
@@ -821,7 +819,7 @@ function emailWrapper(content) {
 /**
  * Monthly Palate Wrapped email — shareable card-style design.
  */
-function buildWrappedEmail({ title, body, data, appUrl, deepLink }) {
+function buildWrappedEmail({ title, body, data, deepLink }) {
   const gamesPlayed = data?.gamesPlayed || "—";
   const accuracy = data?.accuracy || "—";
   const topStrength = data?.topStrength || "—";
@@ -892,7 +890,7 @@ function buildWrappedEmail({ title, body, data, appUrl, deepLink }) {
 /**
  * Quarterly Summary email.
  */
-function buildQuarterlySummaryEmail({ title, body, data, appUrl, deepLink }) {
+function buildQuarterlySummaryEmail({ title, body, data, deepLink }) {
   const quarter = data?.quarter || "Q?";
   const gamesPlayed = data?.gamesPlayed || "—";
   const bottlesScanned = data?.bottlesScanned || "—";
@@ -942,7 +940,7 @@ function buildQuarterlySummaryEmail({ title, body, data, appUrl, deepLink }) {
 /**
  * Season End / Season End Report email.
  */
-function buildSeasonEndEmail({ title, body, data, appUrl, deepLink }) {
+function buildSeasonEndEmail({ title, body, data, deepLink }) {
   const clubName = data?.clubName || "Your Club";
   const champion = data?.champion || "—";
   const championScore = data?.championScore || "—";
@@ -984,7 +982,7 @@ function buildSeasonEndEmail({ title, body, data, appUrl, deepLink }) {
 /**
  * Payment Failed email — urgent billing alert.
  */
-function buildPaymentFailedEmail({ title, body, data, appUrl, deepLink }) {
+function buildPaymentFailedEmail({ title, body, data, deepLink }) {
   return emailWrapper(`
     <div style="text-align:center;margin-bottom:16px;">
       <span style="display:inline-block;width:48px;height:48px;border-radius:50%;background-color:rgba(248,113,113,0.15);line-height:48px;font-size:24px;">⚠️</span>
@@ -1013,7 +1011,7 @@ function buildPaymentFailedEmail({ title, body, data, appUrl, deepLink }) {
 /**
  * Club Membership Reduced email.
  */
-function buildMembershipReducedEmail({ title, body, data, appUrl, deepLink }) {
+function buildMembershipReducedEmail({ title, body, data, deepLink }) {
   return emailWrapper(`
     <h1 style="font-size:22px;font-weight:900;color:#FFFFFF;margin:0 0 12px;text-align:center;">
       ${title}
@@ -1028,7 +1026,7 @@ function buildMembershipReducedEmail({ title, body, data, appUrl, deepLink }) {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
       <tr>
         <td align="center">
-          <a href="${appUrl}/subscription" class="btn">Upgrade to Pro</a>
+          <a href="${appLink("subscription")}" class="btn">Upgrade to Pro</a>
         </td>
       </tr>
     </table>
@@ -1038,7 +1036,7 @@ function buildMembershipReducedEmail({ title, body, data, appUrl, deepLink }) {
 /**
  * Generic notification email.
  */
-function buildGenericEmail({ title, body, appUrl, deepLink }) {
+function buildGenericEmail({ title, body, deepLink }) {
   return emailWrapper(`
     <h1 style="font-size:22px;font-weight:900;color:#FFFFFF;margin:0 0 16px;">
       ${title}

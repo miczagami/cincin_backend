@@ -19,8 +19,8 @@
  */
 
 const prisma = require("../config/database");
-const config = require("../config");
 const { generateCode } = require("../utils/helpers");
+const { appLink } = require("./appLinks");
 
 // ═══════════════════════════════════════════
 //  CLUB CREATION & MANAGEMENT (Section 5.2)
@@ -62,7 +62,7 @@ async function createClub(userId, data) {
       name: data.name,
       memberCap: data.memberCap || null,
       inviteCode,
-      inviteLink: `${config.appUrl}/club/join/${inviteCode}`,
+      inviteLink: appLink("clubJoin", { inviteCode }),
       members: {
         create: {
           userId,

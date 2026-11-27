@@ -165,6 +165,7 @@ Webhook URLs (Stripe, Onfido), Google/Apple sign-in origins and email links don'
 
 - **Railway:** delete the API service and the Postgres database (take a final dump first).
 - **Vercel:** delete both projects.
+- **`cincin_www`:** remove the README's "Moving off Vercel" section.
 - **`cincin_frontend`:** delete `vercel.json`. Sevalla doesn't use it.
 
 ---

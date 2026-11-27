@@ -466,6 +466,7 @@ function buildDeepLink(data) {
   switch (data.type) {
     case "game_invite":
       return appLink("gameJoin", data);
+    case "club_game_submitted": // the admin approves or rejects it on the club screen
     case "club_game_approved":
     case "club_game_rejected":
     case "club_member_joined":

@@ -76,3 +76,13 @@ test("unverified users can't create or join clubs", async () => {
   const res = await api.post("/clubs", { name: "Nope Club" }, { token });
   expect(res.status).toBe(403);
 });
+
+test("season history gives each season's length, so a new season can copy an ended one", async () => {
+  const created = await api.post("/clubs", { name: `Length Club ${Date.now()}`, seasonType: "FIXED_LENGTH", seasonLengthDays: 30 }, { token: hostToken });
+  expect(created.status).toBe(201);
+
+  const history = await api.get(`/clubs/${created.body.id}/seasons`, { token: hostToken });
+
+  expect(history.status).toBe(200);
+  expect(history.body[0]).toMatchObject({ seasonType: "FIXED_LENGTH", lengthDays: 30 });
+});

@@ -21,6 +21,7 @@ describe("push and email deep links", () => {
     [{ type: "club_member_joined", clubId: "club-1" }, "/clubs/club-1"],
     [{ type: "weekly_standings", clubId: "club-1" }, "/clubs/club-1"],
     [{ type: "club_game_approved" }, "/clubs"],
+    [{ type: "club_game_submitted", clubId: "club-1" }, "/clubs/club-1"], // the admin approves it there
     [{ type: "palate_updated" }, "/palate/profile"],
     [{ type: "monthly_palate_wrapped" }, "/palate/wrapped"],
     [{ type: "payment_failed" }, "/subscription"],

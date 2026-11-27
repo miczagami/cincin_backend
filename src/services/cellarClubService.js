@@ -891,6 +891,7 @@ async function getSeasonHistory(clubId, userId) {
     id: s.id,
     name: s.name,
     seasonType: s.seasonType,
+    lengthDays: s.lengthDays, // so a new season can copy an ended one's settings
     startDate: s.startDate,
     endDate: s.endDate,
     status: s.status,

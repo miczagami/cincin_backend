@@ -25,8 +25,10 @@ const appPaths = {
 
 /** The full link to an app path, on the app's configured address (config.appUrl). */
 function appLink(name, params = {}) {
+  const pathFor = appPaths[name];
+  if (!pathFor) throw new Error(`No app path named "${name}" in appLinks.js`);
   const { appUrl } = require("../config");
-  return `${appUrl}${appPaths[name](params)}`;
+  return `${appUrl}${pathFor(params)}`;
 }
 
 module.exports = { appPaths, appLink };

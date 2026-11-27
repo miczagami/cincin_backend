@@ -45,6 +45,8 @@ test("create → join by invite code → tag game → approve → leaderboard", 
   const created = await api.post("/clubs", { name: `Smoke Club ${Date.now()}`, seasonType: "ROLLING" }, { token: hostToken });
   expect(created.status).toBe(201);
   const { id: clubId, inviteCode } = created.body;
+  // The invite link opens the app's club join screen with this code
+  expect(new URL(created.body.inviteLink).pathname + new URL(created.body.inviteLink).search).toBe(`/clubs/join?code=${inviteCode}`);
 
   // Non-members can't see it; joining by code grants access
   const member = await createUser();

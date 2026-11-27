@@ -39,6 +39,11 @@ describe("the app paths the backend links to", () => {
     expect(appPaths.clubJoin({ inviteCode: "WINE42" })).toBe("/clubs/join?code=WINE42");
   });
 
+  test("a link to a path that doesn't exist fails loudly, naming it", () => {
+    const { appLink } = require("../src/services/appLinks");
+    expect(() => appLink("gameLobyy")).toThrow('No app path named "gameLobyy"');
+  });
+
   test("every path is a same-app path, built from named params alone", () => {
     const params = { gameCode: "ABC123", inviteCode: "WINE42", clubId: "club-1", token: "t0k" };
     for (const [name, pathFor] of Object.entries(appPaths)) {

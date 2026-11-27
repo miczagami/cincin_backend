@@ -53,7 +53,7 @@ DNS stays on Cloudflare. Nothing changes for users until the DNS records are swi
    | `CORS_ORIGIN` | `https://app.playcincin.com` |
    | `APP_URL` | `https://app.playcincin.com` |
    | `CLIENT_IP_HEADER` | `cf-connecting-ip` |
-   | everything else | Copy from Railway: AI keys, Stripe, SendGrid, Onfido, Google/Apple client IDs, Firebase, APNs, rate limits. |
+   | everything else | Copy from Railway: AI keys, Stripe, SendGrid, Onfido, Google/Apple client IDs, Firebase, APNs, rate limits. Skip any value naming `getcincin.com` (for example `EMAIL_FROM_ADDRESS` or `APNS_BUNDLE_ID`): leave it unset to get the playcincin.com default, or set the playcincin.com value. |
 
    Leave these out:
    - `PORT`: Sevalla sets it.

@@ -33,3 +33,7 @@ test("anthropic, or no provider setting at all, starts normally", () => {
   expect(() => loadConfig({})).not.toThrow();
   expect(() => loadConfig({ AI_VISION_PROVIDER: "anthropic", AI_LLM_PROVIDER: "anthropic" })).not.toThrow();
 });
+
+test("the startup message quotes the value, so a stray space or capital is visible", () => {
+  expect(() => loadConfig({ AI_VISION_PROVIDER: "anthropic " })).toThrow('AI_VISION_PROVIDER="anthropic "');
+});

@@ -723,8 +723,8 @@ const GUESS_VERDICT_FORMAT = {
  * Uses LLM to determine synonyms, alternate spellings, regional terms.
  */
 async function evaluateGuessWithAI(rawGuessText, availableNotes) {
-  // Only attempt AI evaluation if we have an API key
-  if (!process.env.ANTHROPIC_API_KEY) return null;
+  // Only attempt AI evaluation if the Claude client has a key
+  if (!aiClient.hasApiKey()) return null;
 
   // Guesses are player input: only short, flavour-shaped text reaches the model
   const guessText = normaliseForAI(rawGuessText);

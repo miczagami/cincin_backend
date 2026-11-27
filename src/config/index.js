@@ -16,7 +16,7 @@ if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
 for (const name of ["AI_VISION_PROVIDER", "AI_LLM_PROVIDER"]) {
   const value = process.env[name];
   if (value && value !== "anthropic") {
-    throw new Error(`${name}=${value} is not supported: CinCin uses Anthropic only. Remove the variable or set it to "anthropic".`);
+    throw new Error(`${name}=${JSON.stringify(value)} is not supported: CinCin uses Anthropic only. Remove the variable or set it to "anthropic".`);
   }
 }
 

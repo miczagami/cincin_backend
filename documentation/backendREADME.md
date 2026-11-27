@@ -8,7 +8,7 @@ AI-powered tasting game — Phase 1 Foundation complete.
 - **Database:** PostgreSQL + Prisma ORM
 - **Cache:** Redis (optional, graceful fallback)
 - **Auth:** JWT (access + refresh tokens), bcrypt, Onfido/Jumio age verification
-- **AI:** Multi-provider vision API (Anthropic/OpenAI/Google Vision) + LLM tasting note synthesis
+- **AI:** Anthropic Claude for label vision, tasting note synthesis and guess evaluation
 - **Validation:** express-validator
 - **Security:** helmet, cors, express-rate-limit
 - **CI/CD:** GitHub Actions (lint → test → migrate → deploy)
@@ -160,7 +160,7 @@ cincin-backend/
 - Region-dependent age requirements (AU/NZ 18+, US 21+)
 
 ### AI Pipeline v1 (Weeks 1–4) ✅
-- Multi-provider vision API (Anthropic Claude, OpenAI GPT-4o, Google Vision)
+- Label vision with Anthropic Claude
 - Label recognition → bottle identification with confidence scoring
 - Confidence states: HIGH (≥80%), MEDIUM (50–79%), LOW (<50%), NONE
 - Bottle matching engine (exact match, fuzzy match, scoring, alternatives)

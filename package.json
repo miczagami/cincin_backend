@@ -31,7 +31,6 @@
     "jose": "^5.10.0",
     "jsonwebtoken": "^9.0.0",
     "node-cron": "^3.0.3",
-    "openai": "^4.104.0",
     "prisma": "^5.22.0",
     "socket.io": "^4.8.0",
     "stripe": "^17.0.0",

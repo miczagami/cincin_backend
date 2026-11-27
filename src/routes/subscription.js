@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const subscriptionService = require("../services/subscriptionService");
 const { requireAuth, requireEmailVerified } = require("../middleware/auth");
+const { validate } = require("../validators/cellarClub");
+const { checkoutRules } = require("../validators/phase4");
 const config = require("../config");
 
 // ═══════════════════════════════════════════════════════════════
@@ -30,7 +32,7 @@ router.get("/status", requireAuth, async (req, res, next) => {
 
 // POST /api/subscription/checkout
 // Requires email verification (Section 7.2)
-router.post("/checkout", requireAuth, requireEmailVerified, async (req, res, next) => {
+router.post("/checkout", requireAuth, requireEmailVerified, checkoutRules, validate, async (req, res, next) => {
   try {
     // Return links come from APP_URL on the server; any the request sends are ignored
     const session = await subscriptionService.createCheckoutSession(req.user.id, { plan: req.body.plan });

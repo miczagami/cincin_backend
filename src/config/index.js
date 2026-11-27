@@ -14,7 +14,8 @@ if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
 module.exports = {
   env: process.env.NODE_ENV || "development",
   port: parseInt(process.env.PORT, 10) || 4000,
-  appUrl: process.env.APP_URL || "http://localhost:3000",
+  // The app's public URL, used in emails, push links and Stripe returns. Local dev sets APP_URL (see .env.example).
+  appUrl: process.env.APP_URL || "https://app.playcincin.com",
   corsOrigin: process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
   : 'http://localhost:3000',
@@ -100,11 +101,7 @@ module.exports = {
   // Age Verification (read directly by services/ageVerifyService.js)
   ageVerifyProvider: process.env.AGE_VERIFY_PROVIDER || "onfido",
   ageVerifyApiKey: process.env.AGE_VERIFY_API_KEY,
-  ageVerifyApiSecret: process.env.AGE_VERIFY_API_SECRET,
   ageVerifyWebhookSecret: process.env.AGE_VERIFY_WEBHOOK_SECRET,
-
-  // Share URLs
-  shareBaseUrl: process.env.SHARE_BASE_URL || "http://localhost:3000",
 
   // Free tier limits (Section 8.1)
   freeTier: {
@@ -171,7 +168,7 @@ module.exports = {
   // ═══════════════════════════════════════════
   email: {
     sendgridApiKey: process.env.SENDGRID_API_KEY || null,
-    fromAddress: process.env.EMAIL_FROM_ADDRESS || "noreply@getcincin.com",
+    fromAddress: process.env.EMAIL_FROM_ADDRESS || "noreply@playcincin.com",
     fromName: process.env.EMAIL_FROM_NAME || "CinCin",
   },
 
@@ -183,7 +180,7 @@ module.exports = {
     apnsKeyPath: process.env.APNS_KEY_PATH || null,
     apnsKeyId: process.env.APNS_KEY_ID || null,
     apnsTeamId: process.env.APNS_TEAM_ID || null,
-    apnsBundleId: process.env.APNS_BUNDLE_ID || "com.getcincin.app",
+    apnsBundleId: process.env.APNS_BUNDLE_ID || "com.playcincin.app",
   },
 
   // ═══════════════════════════════════════════

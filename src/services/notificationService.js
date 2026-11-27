@@ -69,7 +69,7 @@ function getFirebaseAdmin() {
  *   - APNS_KEY_PATH  — path to .p8 key file
  *   - APNS_KEY_ID    — Key ID from Apple Developer
  *   - APNS_TEAM_ID   — Team ID from Apple Developer
- *   - APNS_BUNDLE_ID — App bundle ID (default: com.getcincin.app)
+ *   - APNS_BUNDLE_ID — App bundle ID (default: com.playcincin.app)
  */
 function getApnProvider() {
   if (_apnProvider) return _apnProvider;
@@ -340,8 +340,9 @@ async function sendFCM(token, { title, body, data }) {
     // Web push specific options
     webpush: {
       notification: {
-        icon: "/icons/icon-192x192.png",
-        badge: "/icons/badge-72x72.png",
+        // Files the app serves (cincin_frontend/public)
+        icon: "/icon-192.png",
+        badge: "/badge-72.png",
         vibrate: [100, 50, 100],
         actions: getNotificationActions(data?.type),
       },
@@ -389,7 +390,7 @@ async function sendAPNS(token, { title, body, data }) {
   notification.payload = data || {};
 
   // Required: bundle ID
-  notification.topic = config.push.apnsBundleId || "com.getcincin.app";
+  notification.topic = config.push.apnsBundleId;
 
   // Sound
   notification.sound = "default";
@@ -455,7 +456,7 @@ function isTokenExpired(err) {
  * Build a deep link URL for the notification tap action.
  */
 function buildDeepLink(data) {
-  const appUrl = config.appUrl || "https://app.getcincin.com";
+  const appUrl = config.appUrl;
   if (!data) return appUrl;
 
   switch (data.type) {
@@ -557,8 +558,8 @@ async function sendEmailNotification(email, { userId, title, body, data, type })
     const msg = {
       to: email,
       from: {
-        email: config.email.fromAddress || "noreply@getcincin.com",
-        name: config.email.fromName || "CinCin",
+        email: config.email.fromAddress,
+        name: config.email.fromName,
       },
       subject: title,
       text: body, // Plain text fallback
@@ -586,7 +587,7 @@ async function sendEmailNotification(email, { userId, title, body, data, type })
         subject: title,
         title,
         body,
-        appUrl: config.appUrl || "https://app.getcincin.com",
+        appUrl: config.appUrl,
         deepLink: buildDeepLink(data),
         year: new Date().getFullYear(),
         ...flattenData(data),
@@ -627,8 +628,8 @@ async function sendAccountEmail(email, { userId, type, subject, heading, body, a
     await getSendGrid().send({
       to: email,
       from: {
-        email: config.email.fromAddress || "noreply@getcincin.com",
-        name: config.email.fromName || "CinCin",
+        email: config.email.fromAddress,
+        name: config.email.fromName,
       },
       subject,
       text: `${body}\n\n${actionLabel}: ${actionUrl}`,
@@ -701,7 +702,7 @@ function flattenData(data) {
  * Falls back to generic template for unknown types.
  */
 function buildEmailHtml(type, { title, body, data }) {
-  const appUrl = config.appUrl || "https://app.getcincin.com";
+  const appUrl = config.appUrl;
   const deepLink = buildDeepLink(data);
 
   switch (type) {
@@ -800,9 +801,9 @@ function emailWrapper(content) {
               <p style="font-size:12px;color:#737373;margin:0;">
                 You're receiving this because of your CinCin notification preferences.
                 <br>
-                <a href="${config.appUrl || "https://app.getcincin.com"}/settings" style="color:#22D3EE;">Manage preferences</a>
+                <a href="${config.appUrl}/settings" style="color:#22D3EE;">Manage preferences</a>
                 &nbsp;·&nbsp;
-                <a href="${config.appUrl || "https://app.getcincin.com"}" style="color:#22D3EE;">Open CinCin</a>
+                <a href="${config.appUrl}" style="color:#22D3EE;">Open CinCin</a>
               </p>
               <p style="font-size:11px;color:#525252;margin:12px 0 0;">
                 &copy; ${new Date().getFullYear()} CinCin Pty Ltd · Melbourne, Australia

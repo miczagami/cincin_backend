@@ -4,7 +4,7 @@
  */
 const { format } = require("util");
 
-const LEVELS = ["log", "info", "warn", "error"];
+const LEVELS = ["log", "info", "warn", "error", "debug", "dir"];
 
 function captureConsole() {
   const lines = [];

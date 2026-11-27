@@ -38,7 +38,6 @@ afterEach(() => {
   config.email.sendgridApiKey = originalKey;
 });
 
-
 describe("account emails", () => {
   test("a sent account email logs the user ID, not the address", async () => {
     config.env = "production";

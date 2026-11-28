@@ -95,7 +95,8 @@ For age verification in development, set `AGE_VERIFY_PROVIDER=mock` in `.env`.
 ### Health
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/health` | Health check (includes Redis status) |
+| GET | `/health` | Readiness check: runs a database query (503 when it fails); includes Redis status |
+| GET | `/health/live` | Liveness check: no database call |
 
 ## Project Structure
 

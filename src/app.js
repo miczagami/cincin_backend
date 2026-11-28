@@ -56,15 +56,42 @@ app.use(WEBHOOK_PATHS, express.raw({ type: "*/*" }));
 app.use(express.json({ limit: "10mb" })); // 10mb for image uploads
 app.use(express.urlencoded({ extended: true }));
 
-// ─── Health check ───
-app.get("/health", (req, res) => {
+// ─── Health checks ───
+// Liveness: the process is up and serving HTTP. No database call, so a slow or failing
+// database never gets the API (and the live games it holds in memory) restarted.
+app.get("/health/live", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// How long the readiness check waits for its query: short, so a platform can poll it every few seconds
+const HEALTH_DB_TIMEOUT_MS = 2000;
+
+// Readiness: runs one trivial query, so a wrong DATABASE_URL fails the platform's health check.
+// The reply never carries the driver's error: it can name the host, port and user.
+app.get("/health", async (req, res) => {
   const { isRedisConnected } = require("./config/redis");
-  res.json({
-    status: "ok",
+  const prisma = require("./config/database");
+  const body = {
     timestamp: new Date().toISOString(),
     redis: isRedisConnected() ? "connected" : "disconnected",
     phase: "4", // Phase 4: Profile & Monetisation
-  });
+  };
+  let timer;
+  try {
+    await Promise.race([
+      prisma.$queryRaw`SELECT 1`,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`no reply within ${HEALTH_DB_TIMEOUT_MS}ms`)), HEALTH_DB_TIMEOUT_MS);
+      }),
+    ]);
+  } catch (err) {
+    // One line, so log viewers that split on newlines show the cause on the [health] line
+    console.error("[health] database query failed:", err.message.replace(/\s+/g, " ").trim());
+    return res.status(503).json({ status: "error", database: "unreachable", reason: "Database query failed", ...body });
+  } finally {
+    clearTimeout(timer);
+  }
+  res.json({ status: "ok", database: "connected", ...body });
 });
 
 // ─── API routes (Phase 1–3) ───

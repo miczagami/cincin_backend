@@ -69,3 +69,13 @@ test("the liveness check stays ok while the database is down, so the platform do
   expect(res.status).toBe(200);
   expect(await res.json()).toMatchObject({ status: "ok" });
 });
+
+test("the [health] log line itself names the cause when the driver's message spans lines", async () => {
+  // Prisma's messages start with a newline and put the cause on a later line
+  prisma.$queryRaw.mockRejectedValue(new Error("\nInvalid `prisma.$queryRaw()` invocation:\n\n\nAuthentication failed against database server"));
+
+  await fetch(`${base}/health`);
+
+  const line = consoleOut.output().split("\n").find((l) => l.startsWith("[health]"));
+  expect(line).toContain("Authentication failed against database server");
+});

@@ -85,7 +85,8 @@ app.get("/health", async (req, res) => {
       }),
     ]);
   } catch (err) {
-    console.error("[health] database query failed:", err.message);
+    // One line, so log viewers that split on newlines show the cause on the [health] line
+    console.error("[health] database query failed:", err.message.replace(/\s+/g, " ").trim());
     return res.status(503).json({ status: "error", database: "unreachable", reason: "Database query failed", ...body });
   } finally {
     clearTimeout(timer);

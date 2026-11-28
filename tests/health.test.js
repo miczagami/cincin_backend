@@ -68,6 +68,8 @@ test("the liveness check stays ok while the database is down, so the platform do
 
   expect(res.status).toBe(200);
   expect(await res.json()).toMatchObject({ status: "ok" });
+  // Waiting on the database at all would hang liveness when the database hangs
+  expect(prisma.$queryRaw).not.toHaveBeenCalled();
 });
 
 test("the [health] log line itself names the cause when the driver's message spans lines", async () => {

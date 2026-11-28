@@ -56,8 +56,14 @@ app.use(WEBHOOK_PATHS, express.raw({ type: "*/*" }));
 app.use(express.json({ limit: "10mb" })); // 10mb for image uploads
 app.use(express.urlencoded({ extended: true }));
 
-// ─── Health check ───
-// Runs one trivial query, so a wrong DATABASE_URL fails the platform's health check.
+// ─── Health checks ───
+// Liveness: the process is up and serving HTTP. No database call, so a slow or failing
+// database never gets the API (and the live games it holds in memory) restarted.
+app.get("/health/live", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Readiness: runs one trivial query, so a wrong DATABASE_URL fails the platform's health check.
 // The reply never carries the driver's error: it can name the host, port and user.
 app.get("/health", async (req, res) => {
   const { isRedisConnected } = require("./config/redis");

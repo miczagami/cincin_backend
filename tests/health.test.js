@@ -59,3 +59,12 @@ test("a database that never answers makes /health fail within its timeout", asyn
   expect(res?.status ?? null).toBe(503);
   expect(await res.json()).toMatchObject({ status: "error", database: "unreachable" });
 });
+
+test("the liveness check stays ok while the database is down, so the platform doesn't restart the API", async () => {
+  prisma.$queryRaw.mockRejectedValue(new Error("Can't reach database server"));
+
+  const res = await fetch(`${base}/health/live`);
+
+  expect(res.status).toBe(200);
+  expect(await res.json()).toMatchObject({ status: "ok" });
+});

@@ -68,7 +68,8 @@ DNS stays on Cloudflare. Nothing changes for users until the DNS records are swi
 5. **Processes:**
    - **Web process:**
      - Instances: **1** (see "Why one instance" below).
-     - Readiness and liveness probes: path `/health`, port `8080`.
+     - Readiness probe: path `/health`, port `8080`. It queries the database, so a wrong `DATABASE_URL` keeps the new version from going live.
+     - Liveness probe: path `/health/live`, port `8080`. It never touches the database: pointing liveness at `/health` would restart the API (dropping every live game, see "Why one instance") whenever the database is slow or briefly down, which a restart can't fix.
      - Start command: leave blank to use the Dockerfile's.
    - **Add process → Job**, start policy **Before deployment**, command:
      ```

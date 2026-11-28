@@ -74,7 +74,8 @@ Node.js + Express backend for the CinCin AI tasting game. Phase 2 adds the compl
 ### Health
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/health` | Health check: runs a database query (503 when it fails); includes Redis status |
+| GET | `/health` | Readiness check: runs a database query (503 when it fails); includes Redis status |
+| GET | `/health/live` | Liveness check: no database call |
 
 ## Project Structure
 

@@ -168,12 +168,12 @@ Do this immediately before switching `api.playcincin.com` (step 7, row c). The A
    ```
 6. **Compare the two databases.** These should match between Railway (`$RAILWAY_DATABASE_PUBLIC_URL`) and Sevalla (`$SEVALLA_EXTERNAL_URL`):
    ```bash
-   for NAME in RAILWAY_DATABASE_PUBLIC_URL SEVALLA_EXTERNAL_URL; do
-     echo "== $NAME"
-     DB="${!NAME}"
-     psql "$DB" -c 'SELECT migration_name FROM _prisma_migrations ORDER BY 1;'
-     psql "$DB" -c 'SELECT (SELECT count(*) FROM users) AS users, (SELECT count(*) FROM users WHERE "subscriptionId" IS NOT NULL) AS subscribers, (SELECT count(*) FROM games) AS games, (SELECT count(*) FROM guesses) AS guesses, (SELECT count(*) FROM cellar_clubs) AS clubs;'
-   done
+   echo '== Railway'
+   psql "$RAILWAY_DATABASE_PUBLIC_URL" -c 'SELECT migration_name FROM _prisma_migrations ORDER BY 1;'
+   psql "$RAILWAY_DATABASE_PUBLIC_URL" -c 'SELECT (SELECT count(*) FROM users) AS users, (SELECT count(*) FROM users WHERE "subscriptionId" IS NOT NULL) AS subscribers, (SELECT count(*) FROM games) AS games, (SELECT count(*) FROM guesses) AS guesses, (SELECT count(*) FROM cellar_clubs) AS clubs;'
+   echo '== Sevalla'
+   psql "$SEVALLA_EXTERNAL_URL" -c 'SELECT migration_name FROM _prisma_migrations ORDER BY 1;'
+   psql "$SEVALLA_EXTERNAL_URL" -c 'SELECT (SELECT count(*) FROM users) AS users, (SELECT count(*) FROM users WHERE "subscriptionId" IS NOT NULL) AS subscribers, (SELECT count(*) FROM games) AS games, (SELECT count(*) FROM guesses) AS guesses, (SELECT count(*) FROM cellar_clubs) AS clubs;'
    ```
 7. **Turn the external connection off again.**
 8. **Redeploy the API on Sevalla.** The pre-deploy job applies any migrations Railway hadn't run yet. Leave `CRON_ENABLED=false` for now: if the cutover rolls back, a Sevalla API with the jobs on would keep emailing real players from its copy.
@@ -227,7 +227,7 @@ Until step 10, the old platforms stay as they are: both Vercel projects with the
   2. Recreate Railway's CNAME and its `_railway-verify.api` TXT record.
   3. Set the Railway API's replicas back to 1 (or redeploy it, if its deployment was removed).
 
-  No data is lost, because the cutover only read Railway's database.
+  No data is lost, because the cutover only read Railway's database. To try the cutover again later, set the Sevalla web process's instances back to 1 before step 6.
 - **The API fails after Sevalla has taken writes:**
   1. Stop the Sevalla web process (set its instances to 0), so nothing else is written.
   2. Turn `cincin-db`'s external connection on again (step 6.3), then dump Sevalla over it: `pg_dump -Fc --no-owner --no-acl "$SEVALLA_EXTERNAL_URL" -f sevalla.dump`. If Sevalla runs a newer Postgres version than Railway, the restore into Railway's older server can fail on newer features; check the restore's errors before restarting Railway.

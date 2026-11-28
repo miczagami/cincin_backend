@@ -87,7 +87,7 @@ DNS stays on Cloudflare. Nothing changes for users until the DNS records are swi
    - Auto-deploy on.
 2. Build settings:
    - Build command: `npm run build`. If the log shows `vite: not found`, use `npm ci && npm run build`.
-   - Node version: `20`.
+   - Node version: `22`.
    - Publish directory: `dist`.
 3. **Environment variables** (build-time; Vite bakes them into the bundle):
    - `VITE_API_URL=https://api.playcincin.com`
@@ -186,7 +186,7 @@ Scaling out later needs three changes:
 ## What changed in the code for Sevalla
 
 - **`Dockerfile` / `.dockerignore`:**
-  - Builds a production image: Node 20, OpenSSL for Prisma, Prisma client generated at build time.
+  - Builds a production image: Node 22, OpenSSL for Prisma, Prisma client generated at build time.
   - The same image runs the pre-deploy migration job.
 - **`prisma` CLI moved to `dependencies`,** so `prisma migrate deploy` is available in the production image.
 - **`CLIENT_IP_HEADER`:**

@@ -174,7 +174,7 @@ Real-time multiplayer and Cellar Club system for the CinCin AI tasting game.
 ### Health
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/health` | Health check (Redis + phase indicator) |
+| GET | `/health` | Health check: runs a database query (503 when it fails); Redis + phase indicator |
 
 ## Project Structure
 

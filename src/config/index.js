@@ -59,6 +59,8 @@ module.exports = {
 
   // Database
   databaseUrl: process.env.DATABASE_URL,
+  // How long GET /health waits for its database query before reporting failure
+  healthDbTimeoutMs: parseInt(process.env.HEALTH_DB_TIMEOUT_MS, 10) || 2000,
 
   // Redis
   redisUrl: process.env.REDIS_URL || null,

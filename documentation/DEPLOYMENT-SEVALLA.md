@@ -76,7 +76,7 @@ DNS stays on Cloudflare. Nothing changes for users until the DNS records are swi
      ```
      This applies database migrations before each new version goes live, as Railway's release step would.
 6. **Deploy.** Then:
-   - Check `https://<your-app>.sevalla.app/health` returns `{"status":"ok",...}`.
+   - Check `https://<your-app>.sevalla.app/health` returns `{"status":"ok","database":"connected",...}`. A **503** with `"database":"unreachable"` means the API can't query the database (check `DATABASE_URL`); the API log line starting `[health]` says why.
    - Check the job's log shows "migrations applied", or "No pending migrations".
 
 ## 3. App (`cincin_frontend`)
@@ -149,7 +149,7 @@ For each domain, start in Sevalla (application or static site → **Domains** �
 
 Checks after each switch:
 - **api:**
-  - `curl https://api.playcincin.com/health` returns ok.
+  - `curl https://api.playcincin.com/health` returns ok (status 200, `"database":"connected"`).
   - Log in on the app.
   - Start a multi-device game. In DevTools → Network, the `socket.io` request should upgrade (status **101**).
   - Send a Stripe test webhook (Stripe → Developers → Webhooks → your endpoint → Send test event) and confirm it returns 2xx.

@@ -59,8 +59,13 @@ module.exports = {
 
   // Database
   databaseUrl: process.env.DATABASE_URL,
-  // How long GET /health waits for its database query before reporting failure
-  healthDbTimeoutMs: parseInt(process.env.HEALTH_DB_TIMEOUT_MS, 10) || 2000,
+  // How long GET /health waits for its database query before reporting failure.
+  // Anything but a number of ms from 1 to 60000 falls back to 2000: a negative or
+  // oversized value would make Node fire the timer at once and fail every check.
+  healthDbTimeoutMs: (() => {
+    const ms = Number(process.env.HEALTH_DB_TIMEOUT_MS);
+    return ms >= 1 && ms <= 60000 ? ms : 2000;
+  })(),
 
   // Redis
   redisUrl: process.env.REDIS_URL || null,

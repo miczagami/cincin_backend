@@ -58,7 +58,7 @@ DNS stays on Cloudflare. Nothing changes for players until the DNS records are s
    | `CORS_ORIGIN` | `https://app.playcincin.com` |
    | `APP_URL` | `https://app.playcincin.com` |
    | `CLIENT_IP_HEADER` | `cf-connecting-ip` |
-   | `CRON_ENABLED` | `false` **until the cutover** (step 6.8). Once the rehearsal (step 5) restores a copy of production, the scheduled jobs would send real players emails and pushes that Railway is already sending. |
+   | `CRON_ENABLED` | `false` **until the API cutover is done** (after step 7, row c; see step 6). Once the rehearsal (step 5) restores a copy of production, the scheduled jobs would send real players emails and pushes that Railway is already sending. |
 
    Leave these out:
    - `PORT`: Sevalla sets it.
@@ -105,7 +105,7 @@ DNS stays on Cloudflare. Nothing changes for players until the DNS records are s
 4. Deploy. Then:
    - The deployment log shows `Redirects processed successfully!` and `Headers processed successfully!`. If it says `There were errors while parsing`, the site went out without any of that file's rules: fix the file and deploy again.
    - Open a deep link on the Sevalla preview URL (for example `https://<site>.sevalla.page/profile`) and reload it. It should load the app, through `public/_redirects`.
-   - Once cincin_frontend#41 (the report-only Content-Security-Policy) is merged: `curl -sI https://<site>.sevalla.page/profile` shows `content-security-policy-report-only` (cincin_frontend `documentation/CONTENT-SECURITY-POLICY.md`). Until then, skip this check.
+   - Once the cincin_frontend#41 change (the report-only Content-Security-Policy) is merged: `curl -sI https://<site>.sevalla.page/profile` shows `content-security-policy-report-only` (cincin_frontend `documentation/CONTENT-SECURITY-POLICY.md`). Until then, skip this check.
 
 > Sevalla's edge keeps the site's files until the next deployment, and HTML is sent with `max-age=0`. So a deployment replaces `index.html` for every player at once, with no rule needed in `_headers`. Hashed assets are cached for a year, and the service worker and manifest are always re-checked (`public/_headers`).
 
@@ -150,7 +150,7 @@ Do this immediately before switching `api.playcincin.com` (step 7, row c). The A
 
 **Go/no-go:** if `api.playcincin.com` isn't **Active** on Sevalla, with a certificate, 30 minutes after step 6.1, roll back (see "Rolling back"). Just before 6.1, check the domain still says **Verification** (step 2.7).
 
-1. **Stop writes on Railway.** Railway → API service → set replicas to 0. Rolling back then only needs them set back to 1.
+1. **Stop writes on Railway.** Railway → API service → set replicas to 0. Rolling back then only needs them set back to 1. If Railway won't take 0, remove the active deployment instead; rolling back then means redeploying it.
 2. **Dump the database:**
    ```bash
    pg_dump -Fc --no-owner --no-acl "$RAILWAY_DATABASE_PUBLIC_URL" -f cincin.dump
@@ -168,15 +168,19 @@ Do this immediately before switching `api.playcincin.com` (step 7, row c). The A
    ```
 6. **Compare the two databases.** These should match between Railway (`$RAILWAY_DATABASE_PUBLIC_URL`) and Sevalla (`$SEVALLA_EXTERNAL_URL`):
    ```bash
-   for DB in "$RAILWAY_DATABASE_PUBLIC_URL" "$SEVALLA_EXTERNAL_URL"; do
+   for NAME in RAILWAY_DATABASE_PUBLIC_URL SEVALLA_EXTERNAL_URL; do
+     echo "== $NAME"
+     DB="${!NAME}"
      psql "$DB" -c 'SELECT migration_name FROM _prisma_migrations ORDER BY 1;'
      psql "$DB" -c 'SELECT (SELECT count(*) FROM users) AS users, (SELECT count(*) FROM users WHERE "subscriptionId" IS NOT NULL) AS subscribers, (SELECT count(*) FROM games) AS games, (SELECT count(*) FROM guesses) AS guesses, (SELECT count(*) FROM cellar_clubs) AS clubs;'
    done
    ```
 7. **Turn the external connection off again.**
-8. **Turn the scheduled jobs on, and redeploy the API on Sevalla:** delete `CRON_ENABLED` (it defaults to on), then deploy. The pre-deploy job applies any migrations Railway hadn't run yet.
+8. **Redeploy the API on Sevalla.** The pre-deploy job applies any migrations Railway hadn't run yet. Leave `CRON_ENABLED=false` for now: if the cutover rolls back, a Sevalla API with the jobs on would keep emailing real players from its copy.
 
-Then switch `api` (step 7, row c). Once it is **Active** and its checks pass, take a manual backup: `cincin-db` → **External backups** → under the target, **Create backup**, with the note "After the Railway restore". Taking it after the switch keeps it out of the go/no-go time.
+Then switch `api` (step 7, row c). Once it is **Active** and its checks pass:
+- **Turn the scheduled jobs on:** delete `CRON_ENABLED` on the application (it defaults to on), and deploy. Railway is stopped, so Sevalla is now the only API sending them.
+- **Take a manual backup:** `cincin-db` → **External backups** → under the target, **Create backup**, with the note "After the Railway restore". Taking it after the switch keeps it out of the go/no-go time.
 
 ## 7. Switch DNS in Cloudflare
 
@@ -196,7 +200,7 @@ For each domain, start in Sevalla (application or static site → **Domains** �
 Sevalla issues SSL certificates automatically once a domain verifies. Keep the `_acme-challenge` record: renewals need it.
 
 Checks after each switch:
-- **app:** load, sign in, reload on a deep link, and, once cincin_frontend#41 is merged, check the CSP header (step 3.4) on `https://app.playcincin.com/profile`.
+- **app:** load, sign in, reload on a deep link, and, once the cincin_frontend#41 change is merged, check the CSP header (step 3.4) on `https://app.playcincin.com/profile`.
 - **apex/www:**
   - The apex loads the marketing page, and the "Get started" links reach the app.
   - `curl -sI https://www.playcincin.com/robots.txt` returns `301` with `location: https://playcincin.com/robots.txt`.
@@ -206,7 +210,7 @@ Checks after each switch:
   - Log in on the app.
   - Start a multi-device game. In DevTools → Network, the `socket.io` request should upgrade (status **101**).
   - **Webhooks:** resend a recent live event from the endpoint's delivery list (Stripe → Developers → Webhooks → your endpoint → a recent event → **Resend**), and confirm it returns 2xx. The Stripe CLI's `stripe trigger` only sends test-mode events, so it can't check the live endpoint. Resend anything that failed during the outage, in Stripe and in Onfido's webhook log.
-  - **Per-visitor rate limits (`CLIENT_IP_HEADER`):** request `https://api.playcincin.com/api/scan/taxonomy` from two different networks, for example Wi-Fi and phone data, and compare the `RateLimit-Remaining` response headers (the response itself is a 401 without a login, which is fine). Each network should count down on its own, by exactly 1 per request. If they share one count, the header isn't reaching the API, and every player shares one limit of 100 requests per 15 minutes.
+  - **Per-visitor rate limits (`CLIENT_IP_HEADER`):** request `https://api.playcincin.com/api/scan/taxonomy` from two different networks, for example Wi-Fi and phone data, with the app closed on both devices so only your requests count, and compare the `RateLimit-Remaining` response headers (the response itself is a 401 without a login, which is fine). Each network should count down on its own, by exactly 1 per request. If they share one count, the header isn't reaching the API, and every player shares one limit of 100 requests per 15 minutes.
   - Then work through the checklist's per-feature checks: push, the email sender, the Onfido webhook and the Stripe live webhook.
 
 Webhook URLs (Stripe, Onfido), Google/Apple sign-in origins and email links don't change, because the domains stay the same.
@@ -218,10 +222,15 @@ Until step 10, the old platforms stay as they are: both Vercel projects with the
 **Point of no return:** 24 hours after a clean API cutover. After that, fix forward on Sevalla.
 
 - **The app or the marketing site fails after its DNS switch** (rows a–b, any time before step 10): in Cloudflare, delete Sevalla's pointing record and recreate the Vercel record. Vercel serves again once DNS propagates. Sevalla's `_acme-challenge` record can stay.
-- **The API fails before any player's writes reach Sevalla** (row c, before the go/no-go time): recreate Railway's CNAME and its `_railway-verify.api` TXT record, then set the Railway API's replicas back to 1 (or redeploy it, if its deployment was removed). No data is lost, because the cutover only read Railway's database.
+- **The API fails before any player's writes reach Sevalla** (row c, before the go/no-go time):
+  1. Set the Sevalla web process's instances to 0, so its copy of production does nothing in the background.
+  2. Recreate Railway's CNAME and its `_railway-verify.api` TXT record.
+  3. Set the Railway API's replicas back to 1 (or redeploy it, if its deployment was removed).
+
+  No data is lost, because the cutover only read Railway's database.
 - **The API fails after Sevalla has taken writes:**
   1. Stop the Sevalla web process (set its instances to 0), so nothing else is written.
-  2. Dump Sevalla over its external connection: `pg_dump -Fc --no-owner --no-acl "$SEVALLA_EXTERNAL_URL" -f sevalla.dump`.
+  2. Turn `cincin-db`'s external connection on again (step 6.3), then dump Sevalla over it: `pg_dump -Fc --no-owner --no-acl "$SEVALLA_EXTERNAL_URL" -f sevalla.dump`. If Sevalla runs a newer Postgres version than Railway, the restore into Railway's older server can fail on newer features; check the restore's errors before restarting Railway.
   3. Restore it into Railway the step-6 way: empty Railway's `public` schema, then `pg_restore --single-transaction`.
   4. Set the Railway API's replicas back to 1 (or redeploy it) and recreate Railway's DNS records.
 - **A bad deployment later on Sevalla:**
@@ -288,7 +297,7 @@ Every item from the [runbook review](https://github.com/miczagami/cincin_fronten
 | W5 the API down before its domain can verify | Step 2.7 adds the domain and its `_acme-challenge` within 7 days of the window; step 7 switches the app and the marketing site first; step 6 sets a go/no-go time. |
 | W6 elided DNS targets | Step 0 exports the zone; step 8 restores records from it. |
 | W7 Stripe's "Send test event" | Step 7: resend a real live event, and check Onfido's webhook log. |
-| G1 no rehearsal of the new API | Step 5, on a separate rehearsal static site, with the scheduled jobs off (step 2.4) so the copy of production sends nothing. |
+| G1 no rehearsal of the new API | Step 5, on a separate rehearsal static site, with the scheduled jobs off until the API cutover is done (steps 2.4 and 6), so the copy of production sends nothing, even if the cutover rolls back. |
 | G2 no backups | Step 1.2 checks the backup target; manual backups after the restore (step 6) and before migrations (step 9); step 6.2 keeps the dump. |
 | G3 auto-deploy drops live games | Step 2.1 turns it off; step 9 deploys by hand at quiet hours. |
 | G4 `CLIENT_IP_HEADER` not verified | Step 7, API checks. |

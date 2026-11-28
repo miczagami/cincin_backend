@@ -48,6 +48,8 @@ test("a failing database query makes /health fail without leaking connection det
   expect(res.status).toBe(503);
   expect(JSON.parse(text)).toMatchObject({ status: "error", database: "unreachable" });
   expect(text).not.toMatch(/db\.internal|5432|hunter2|cincin/);
+  // The runbook sends operators to this log line for the reason
+  expect(consoleOut.output()).toContain("[health] database query failed: Can't reach database server");
 });
 
 test("a database that never answers makes /health fail within its timeout", async () => {
@@ -58,6 +60,7 @@ test("a database that never answers makes /health fail within its timeout", asyn
 
   expect(res?.status ?? null).toBe(503);
   expect(await res.json()).toMatchObject({ status: "error", database: "unreachable" });
+  expect(consoleOut.output()).toContain("[health] database query failed: no reply within 100ms");
 });
 
 test("the liveness check stays ok while the database is down, so the platform doesn't restart the API", async () => {

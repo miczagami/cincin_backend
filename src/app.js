@@ -63,6 +63,9 @@ app.get("/health/live", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
+// How long the readiness check waits for its query: short, so a platform can poll it every few seconds
+const HEALTH_DB_TIMEOUT_MS = 2000;
+
 // Readiness: runs one trivial query, so a wrong DATABASE_URL fails the platform's health check.
 // The reply never carries the driver's error: it can name the host, port and user.
 app.get("/health", async (req, res) => {
@@ -78,7 +81,7 @@ app.get("/health", async (req, res) => {
     await Promise.race([
       prisma.$queryRaw`SELECT 1`,
       new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`no reply within ${config.healthDbTimeoutMs}ms`)), config.healthDbTimeoutMs);
+        timer = setTimeout(() => reject(new Error(`no reply within ${HEALTH_DB_TIMEOUT_MS}ms`)), HEALTH_DB_TIMEOUT_MS);
       }),
     ]);
   } catch (err) {

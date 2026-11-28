@@ -1,8 +1,6 @@
 /**
  * GET /health over HTTP: it reports the database, so a wrong DATABASE_URL fails the health check.
  */
-process.env.HEALTH_DB_TIMEOUT_MS = "100";
-
 jest.mock("../src/config/database", () => ({ $queryRaw: jest.fn() }));
 
 const prisma = require("../src/config/database");
@@ -52,16 +50,16 @@ test("a failing database query makes /health fail without leaking connection det
   expect(consoleOut.output()).toContain("[health] database query failed: Can't reach database server");
 });
 
-test("a database that never answers makes /health fail within its timeout", async () => {
+test("a database that never answers makes /health fail within its 2s timeout", async () => {
   prisma.$queryRaw.mockReturnValue(new Promise(() => {}));
 
-  // Give up well past the 100ms check timeout, so a hung check reads as no reply (status null)
-  const res = await fetch(`${base}/health`, { signal: AbortSignal.timeout(1000) }).catch(() => null);
+  // Give up well past the 2s check timeout, so a hung check reads as no reply (status null)
+  const res = await fetch(`${base}/health`, { signal: AbortSignal.timeout(4000) }).catch(() => null);
 
   expect(res?.status ?? null).toBe(503);
   expect(await res.json()).toMatchObject({ status: "error", database: "unreachable" });
-  expect(consoleOut.output()).toContain("[health] database query failed: no reply within 100ms");
-});
+  expect(consoleOut.output()).toContain("[health] database query failed: no reply within 2000ms");
+}, 10000);
 
 test("the liveness check stays ok while the database is down, so the platform doesn't restart the API", async () => {
   prisma.$queryRaw.mockRejectedValue(new Error("Can't reach database server"));

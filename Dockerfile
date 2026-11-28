@@ -1,5 +1,6 @@
 # CinCin API — production image (used by Sevalla; runs anywhere Docker does)
-FROM node:20-bookworm-slim
+# Keep the Node major version in step with package.json engines.node (which CI reads)
+FROM node:22-bookworm-slim
 
 # Prisma's query engine needs OpenSSL
 RUN apt-get update \

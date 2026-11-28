@@ -32,7 +32,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # The Node version is package.json's engines.node
+          node-version-file: package.json
           cache: npm
 
       - run: npm ci
@@ -97,7 +98,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # The Node version is package.json's engines.node
+          node-version-file: package.json
           cache: npm
           cache-dependency-path: |
             package-lock.json
